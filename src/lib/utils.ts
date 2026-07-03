@@ -1,4 +1,4 @@
-import type { MealDoc } from '../types'
+import type { AbsenceDoc, MealDoc } from '../types'
 import { LUNCH_CUTOFF_MIN, DINNER_CUTOFF_MIN, AVATAR_COLORS } from './constants'
 
 export interface DhakaNow {
@@ -112,17 +112,59 @@ export function mealKey(date: string, email: string): string {
   return `${date}_${email}`
 }
 
+export interface ResolvedMeal {
+  lunch: boolean
+  dinner: boolean
+  guestsLunch: number
+  guestsDinner: number
+  legacyGuests: number
+}
+
+// Meal state for one member on one date. Precedence:
+// explicit day toggle (meal doc) > away/absence range > default ON.
+export function resolveMeal(
+  map: Map<string, MealDoc>,
+  absences: AbsenceDoc[],
+  email: string,
+  date: string,
+): ResolvedMeal {
+  const doc = map.get(mealKey(date, email))
+  if (doc) {
+    return {
+      lunch: doc.lunch,
+      dinner: doc.dinner,
+      guestsLunch: doc.guestsLunch ?? 0,
+      guestsDinner: doc.guestsDinner ?? 0,
+      legacyGuests: doc.guests ?? 0,
+    }
+  }
+  let lunch = true
+  let dinner = true
+  for (const a of absences) {
+    if (a.email !== email) continue
+    if (date < a.startDate) continue
+    if (a.endDate && date > a.endDate) continue
+    if (a.lunch) lunch = false
+    if (a.dinner) dinner = false
+  }
+  return { lunch, dinner, guestsLunch: 0, guestsDinner: 0, legacyGuests: 0 }
+}
+
+export function mealUnits(r: ResolvedMeal): number {
+  return (r.lunch ? 1 : 0) + (r.dinner ? 1 : 0) + r.guestsLunch + r.guestsDinner + r.legacyGuests
+}
+
 // Meals for one member across a month (missing doc = both meals ON).
 export function countMeals(
   map: Map<string, MealDoc>,
+  absences: AbsenceDoc[],
   email: string,
   month: string,
   upto: string,
 ): number {
   let total = 0
   for (const date of datesOfMonth(month, upto)) {
-    const doc = map.get(mealKey(date, email))
-    total += (doc?.lunch ?? true ? 1 : 0) + (doc?.dinner ?? true ? 1 : 0) + (doc?.guests ?? 0)
+    total += mealUnits(resolveMeal(map, absences, email, date))
   }
   return total
 }

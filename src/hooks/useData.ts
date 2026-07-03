@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../firebase'
-import type { BazarEntry, DutyDoc, ExpenseDoc, MealDoc, MonthSnapshot } from '../types'
+import type { AbsenceDoc, BazarEntry, DutyDoc, ExpenseDoc, MealDoc, MonthSnapshot } from '../types'
 import { KHALA_DEFAULT } from '../lib/constants'
 
 export function useMeals(month: string): { meals: Map<string, MealDoc>; loading: boolean } {
@@ -119,6 +119,26 @@ export function useMonthSnapshot(month: string): {
     )
   }, [month])
   return { snapshot, loading }
+}
+
+// Away ranges are few and can span months, so subscribe to all of them.
+export function useAbsences(): { absences: AbsenceDoc[]; loading: boolean } {
+  const [absences, setAbsences] = useState<AbsenceDoc[]>([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    return onSnapshot(
+      collection(db, 'absences'),
+      (snap) => {
+        const list: AbsenceDoc[] = []
+        snap.forEach((d) => list.push({ ...(d.data() as AbsenceDoc), id: d.id }))
+        list.sort((a, b) => a.startDate.localeCompare(b.startDate))
+        setAbsences(list)
+        setLoading(false)
+      },
+      () => setLoading(false),
+    )
+  }, [])
+  return { absences, loading }
 }
 
 // Re-render on an interval — used for the live clock and cutoff countdowns.

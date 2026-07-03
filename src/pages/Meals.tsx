@@ -4,7 +4,7 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { ShieldCheck } from 'lucide-react'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import { useMeals, useTick } from '../hooks/useData'
+import { useAbsences, useMeals, useTick } from '../hooks/useData'
 import MonthPicker from '../components/MonthPicker'
 import Avatar from '../components/Avatar'
 import {
@@ -15,8 +15,8 @@ import {
   canToggle,
   mealKey,
   countMeals,
+  resolveMeal,
 } from '../lib/utils'
-import type { MealDoc } from '../types'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -26,6 +26,7 @@ export default function Meals() {
   const now = dhakaNow()
   const [month, setMonth] = useState(monthOf(now.date))
   const { meals } = useMeals(month)
+  const { absences } = useAbsences()
   const myEmail = (member?.email ?? user?.email ?? '').toLowerCase()
   const [selected, setSelected] = useState(myEmail)
   const [override, setOverride] = useState(false)
@@ -33,10 +34,7 @@ export default function Meals() {
   const email = isManager ? selected : myEmail
   const editingSelf = email === myEmail
 
-  function state(date: string) {
-    const d = meals.get(mealKey(date, email))
-    return { lunch: d?.lunch ?? true, dinner: d?.dinner ?? true, guests: d?.guests ?? 0 }
-  }
+  const state = (date: string) => resolveMeal(meals, absences, email, date)
 
   function editable(date: string, meal: 'lunch' | 'dinner') {
     if (isManager && override) return true
@@ -53,10 +51,13 @@ export default function Meals() {
         date,
         month: monthOf(date),
         email,
-        ...cur,
+        lunch: cur.lunch,
+        dinner: cur.dinner,
+        guestsLunch: cur.guestsLunch,
+        guestsDinner: cur.guestsDinner,
         [meal]: !cur[meal],
         updatedAt: serverTimestamp(),
-      } satisfies Partial<MealDoc> & Record<string, unknown>,
+      },
       { merge: true },
     )
   }
@@ -121,6 +122,7 @@ export default function Meals() {
           ))}
           {dates.map((date) => {
             const st = state(date)
+            const guests = st.guestsLunch + st.guestsDinner + st.legacyGuests
             const isToday = date === now.date
             const past = date < now.date
             return (
@@ -152,9 +154,9 @@ export default function Meals() {
                     )
                   })}
                 </div>
-                {st.guests > 0 && (
+                {guests > 0 && (
                   <div className="chip bg-sun-300/60 text-amber-800 !px-1.5 !py-0 text-[9px]">
-                    +{st.guests}
+                    +{guests}
                   </div>
                 )}
               </div>
@@ -185,7 +187,7 @@ export default function Meals() {
         <h2 className="font-extrabold mb-4">Members — meals this month</h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {activeMembers.map((m) => {
-            const c = countMeals(meals, m.email, month, upto)
+            const c = countMeals(meals, absences, m.email, month, upto)
             return (
               <div key={m.email} className="flex items-center gap-3 rounded-2xl bg-ink/3 px-3 py-2.5">
                 <Avatar name={m.name} size="sm" />

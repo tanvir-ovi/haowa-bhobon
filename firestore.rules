@@ -52,9 +52,19 @@ service cloud.firestore {
     // Meal on/off docs. Doc id = YYYY-MM-DD_memberId.
     match /meals/{id} {
       allow read: if isMember();
-      allow write: if isManager()
+      allow create, update: if isManager()
         || (isMember() && request.resource.data.email == myEmail());
-      allow delete: if isManager();
+      allow delete: if isManager()
+        || (isMember() && resource.data.email == myEmail());
+    }
+
+    // Away ranges — meals auto-off for a period (long leave).
+    match /absences/{id} {
+      allow read: if isMember();
+      allow create: if isManager()
+        || (isMember() && request.resource.data.email == myEmail());
+      allow update, delete: if isManager()
+        || (isMember() && resource.data.email == myEmail());
     }
 
     // Bazar entries (groceries a member bought with his own money).

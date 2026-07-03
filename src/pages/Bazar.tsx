@@ -48,6 +48,7 @@ export default function Bazar() {
   const [dutyOpen, setDutyOpen] = useState(false)
   const [dutyEmail, setDutyEmail] = useState('')
   const [dutyStart, setDutyStart] = useState(now.date)
+  const [dutyEnd, setDutyEnd] = useState(addDays(now.date, DUTY_DAYS - 1))
 
   const total = items.reduce((s, i) => s + (Number(i.price) || 0), 0)
 
@@ -142,12 +143,12 @@ export default function Bazar() {
   }
 
   async function saveDuty() {
-    if (!dutyEmail) return
+    if (!dutyEmail || dutyEnd < dutyStart) return
     await addDoc(collection(db, 'duty'), {
       month: monthOf(dutyStart),
       email: dutyEmail,
       startDate: dutyStart,
-      endDate: addDays(dutyStart, DUTY_DAYS - 1),
+      endDate: dutyEnd,
     })
     setDutyOpen(false)
   }
@@ -184,6 +185,7 @@ export default function Bazar() {
               onClick={() => {
                 setDutyEmail(activeMembers[0]?.email ?? '')
                 setDutyStart(now.date)
+                setDutyEnd(addDays(now.date, DUTY_DAYS - 1))
                 setDutyOpen(true)
               }}
             >
@@ -480,14 +482,35 @@ export default function Bazar() {
               ))}
             </select>
           </div>
-          <div>
-            <label className="label">Start date ({DUTY_DAYS} days)</label>
-            <input className="input" type="date" value={dutyStart} onChange={(e) => setDutyStart(e.target.value)} />
-            <p className="text-xs text-ink/45 font-medium mt-1.5">
-              Covers {dayLabel(dutyStart)} → {dayLabel(addDays(dutyStart, DUTY_DAYS - 1))}
-            </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">From</label>
+              <input
+                className="input"
+                type="date"
+                value={dutyStart}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setDutyStart(v)
+                  if (dutyEnd < v) setDutyEnd(addDays(v, DUTY_DAYS - 1))
+                }}
+              />
+            </div>
+            <div>
+              <label className="label">To</label>
+              <input className="input" type="date" value={dutyEnd} min={dutyStart} onChange={(e) => setDutyEnd(e.target.value)} />
+            </div>
           </div>
-          <motion.button whileTap={{ scale: 0.95 }} className="btn-teal w-full py-3" onClick={saveDuty}>
+          <p className="text-xs text-ink/45 font-medium">
+            Covers {dayLabel(dutyStart)} → {dayLabel(dutyEnd)} (usually {DUTY_DAYS} days, but any
+            range works)
+          </p>
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            className="btn-teal w-full py-3"
+            onClick={saveDuty}
+            disabled={dutyEnd < dutyStart}
+          >
             Assign duty
           </motion.button>
         </div>

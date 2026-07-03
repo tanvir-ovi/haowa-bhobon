@@ -1,5 +1,17 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  query,
+  serverTimestamp,
+  setDoc,
+  where,
+  writeBatch,
+} from 'firebase/firestore'
 import {
   UtensilsCrossed,
   ShoppingBasket,
@@ -8,11 +20,14 @@ import {
   Minus,
   Plus,
   Sun,
+  Moon,
   CalendarDays,
+  ChefHat,
+  Trash2,
 } from 'lucide-react'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import { useMeals, useBazar, useDuty, useTick } from '../hooks/useData'
+import { useMeals, useBazar, useDuty, useAbsences, useTick } from '../hooks/useData'
 import {
   dhakaNow,
   monthOf,
@@ -22,19 +37,124 @@ import {
   fmtDuration,
   mealKey,
   countMeals,
+  resolveMeal,
   fmtTk,
   dayLabel,
   monthLabel,
+  type DhakaNow,
+  type ResolvedMeal,
 } from '../lib/utils'
-import { DINNER_CUTOFF_MIN } from '../lib/constants'
 import MealSwitch from '../components/MealSwitch'
 import StatCard from '../components/StatCard'
 import Avatar from '../components/Avatar'
-import type { MealDoc } from '../types'
+import Modal from '../components/Modal'
+import type { AbsenceDoc, MealDoc } from '../types'
+
+type MealPatch = Partial<Pick<MealDoc, 'lunch' | 'dinner' | 'guestsLunch' | 'guestsDinner'>>
+
+// Top-level component (not nested in Dashboard) so re-renders from the
+// countdown tick never remount it — nesting it caused visible flicker.
+function DayCard({
+  title,
+  date,
+  now,
+  st,
+  onPatch,
+}: {
+  title: string
+  date: string
+  now: DhakaNow
+  st: ResolvedMeal
+  onPatch: (patch: MealPatch) => void
+}) {
+  const isToday = date === now.date
+  const lunchLocked = !canToggle(date, 'lunch', now)
+  const dinnerLocked = !canToggle(date, 'dinner', now)
+  const hint = (meal: 'lunch' | 'dinner', locked: boolean) => {
+    if (!isToday) return 'Free to change'
+    if (locked) return meal === 'lunch' ? 'Locked at 9:30 AM' : 'Locked at 6:00 PM'
+    return `Locks in ${fmtDuration(minutesToCutoff(meal, now))}`
+  }
+
+  function GuestRow({
+    label,
+    value,
+    locked,
+    onChange,
+  }: {
+    label: string
+    value: number
+    locked: boolean
+    onChange: (v: number) => void
+  }) {
+    return (
+      <div className="flex items-center justify-between rounded-2xl bg-ink/4 px-3 py-2">
+        <span className="text-xs font-bold text-ink/60">{label}</span>
+        <div className="flex items-center gap-2">
+          <button
+            className="btn-ghost w-7 h-7 rounded-xl"
+            disabled={locked || value === 0}
+            onClick={() => onChange(Math.max(0, value - 1))}
+          >
+            <Minus size={13} />
+          </button>
+          <span className="font-extrabold w-4 text-center tabular-nums text-sm">{value}</span>
+          <button className="btn-ghost w-7 h-7 rounded-xl" disabled={locked} onClick={() => onChange(value + 1)}>
+            <Plus size={13} />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="text-xs font-bold uppercase tracking-wider text-ink/40">{title}</div>
+          <div className="font-extrabold">{dayLabel(date)}</div>
+        </div>
+        <CalendarDays size={18} className="text-ink/30" />
+      </div>
+      <div className="flex gap-3">
+        <MealSwitch
+          label="Lunch"
+          emoji="🍛"
+          on={st.lunch}
+          locked={lunchLocked}
+          hint={hint('lunch', lunchLocked)}
+          onToggle={() => onPatch({ lunch: !st.lunch })}
+        />
+        <MealSwitch
+          label="Dinner"
+          emoji="🍲"
+          on={st.dinner}
+          locked={dinnerLocked}
+          hint={hint('dinner', dinnerLocked)}
+          onToggle={() => onPatch({ dinner: !st.dinner })}
+        />
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <GuestRow
+          label="🍽️ Lunch guests"
+          value={st.guestsLunch}
+          locked={lunchLocked}
+          onChange={(v) => onPatch({ guestsLunch: v })}
+        />
+        <GuestRow
+          label="🍽️ Dinner guests"
+          value={st.guestsDinner}
+          locked={dinnerLocked}
+          onChange={(v) => onPatch({ guestsDinner: v })}
+        />
+      </div>
+    </div>
+  )
+}
 
 export default function Dashboard() {
-  const { member, user, members, activeMembers } = useAuth()
-  useTick(1000)
+  const { member, user, members, activeMembers, isManager } = useAuth()
+  useTick(30000) // refresh countdowns twice a minute; the header clock ticks separately
   const now = dhakaNow()
   const today = now.date
   const tomorrow = addDays(today, 1)
@@ -43,27 +163,60 @@ export default function Dashboard() {
   const { meals: mealsNext } = useMeals(monthOf(tomorrow))
   const { entries: bazar } = useBazar(month)
   const { duty } = useDuty(month)
+  const { absences } = useAbsences()
   const email = (member?.email ?? user?.email ?? '').toLowerCase()
 
+  // Away modal state
+  const [awayOpen, setAwayOpen] = useState(false)
+  const [awayMember, setAwayMember] = useState(email)
+  const [awayLunch, setAwayLunch] = useState(true)
+  const [awayDinner, setAwayDinner] = useState(true)
+  const [awayStart, setAwayStart] = useState(tomorrow)
+  const [awayEnd, setAwayEnd] = useState('')
+  const [awaySaving, setAwaySaving] = useState(false)
+
   const mapFor = (date: string) => (monthOf(date) === month ? meals : mealsNext)
+  const stateFor = (date: string) => resolveMeal(mapFor(date), absences, email, date)
 
-  function mealState(date: string) {
-    const d = mapFor(date).get(mealKey(date, email))
-    return { lunch: d?.lunch ?? true, dinner: d?.dinner ?? true, guests: d?.guests ?? 0 }
-  }
-
-  async function write(date: string, patch: Partial<Pick<MealDoc, 'lunch' | 'dinner' | 'guests'>>) {
-    const cur = mealState(date)
-    await setDoc(
+  function patchMeal(date: string, patch: MealPatch) {
+    const cur = stateFor(date)
+    void setDoc(
       doc(db, 'meals', mealKey(date, email)),
-      { date, month: monthOf(date), email, ...cur, ...patch, updatedAt: serverTimestamp() },
+      {
+        date,
+        month: monthOf(date),
+        email,
+        lunch: cur.lunch,
+        dinner: cur.dinner,
+        guestsLunch: cur.guestsLunch,
+        guestsDinner: cur.guestsDinner,
+        ...patch,
+        updatedAt: serverTimestamp(),
+      },
       { merge: true },
     )
   }
 
+  // Plates the cook needs per meal (members ON + their guests).
+  function cookCounts(date: string) {
+    let lunch = 0
+    let dinner = 0
+    for (const m of activeMembers) {
+      const r = resolveMeal(mapFor(date), absences, m.email, date)
+      lunch += (r.lunch ? 1 : 0) + r.guestsLunch
+      dinner += (r.dinner ? 1 : 0) + r.guestsDinner
+    }
+    return { lunch, dinner }
+  }
+  const cookToday = cookCounts(today)
+  const cookTomorrow = cookCounts(tomorrow)
+
   // Stats
-  const myMeals = countMeals(meals, email, month, today)
-  const totalMeals = activeMembers.reduce((s, m) => s + countMeals(meals, m.email, month, today), 0)
+  const myMeals = countMeals(meals, absences, email, month, today)
+  const totalMeals = activeMembers.reduce(
+    (s, m) => s + countMeals(meals, absences, m.email, month, today),
+    0,
+  )
   const totalBazar = bazar.reduce((s, e) => s + e.total, 0)
   const myBazar = bazar.filter((e) => e.email === email).reduce((s, e) => s + e.total, 0)
   const rate = totalMeals > 0 ? totalBazar / totalMeals : 0
@@ -73,75 +226,39 @@ export default function Dashboard() {
   const dutyNext = duty.find((d) => d.startDate > today)
   const dutyMember = (em?: string) => members.find((m) => m.email === em)
 
+  const activeAbsences = absences.filter((a) => !a.endDate || a.endDate >= today)
+
+  async function saveAway() {
+    if (!awayLunch && !awayDinner) return
+    if (awayEnd && awayEnd < awayStart) return
+    setAwaySaving(true)
+    try {
+      const target = isManager ? awayMember : email
+      await addDoc(collection(db, 'absences'), {
+        email: target,
+        lunch: awayLunch,
+        dinner: awayDinner,
+        startDate: awayStart,
+        endDate: awayEnd,
+        createdAt: serverTimestamp(),
+      })
+      // Clear explicit day toggles inside the range so the leave takes effect.
+      const snap = await getDocs(query(collection(db, 'meals'), where('email', '==', target)))
+      const batch = writeBatch(db)
+      const effectiveFrom = isManager ? awayStart : awayStart > tomorrow ? awayStart : tomorrow
+      snap.forEach((d) => {
+        const dd = d.data() as MealDoc
+        if (dd.date >= effectiveFrom && (!awayEnd || dd.date <= awayEnd)) batch.delete(d.ref)
+      })
+      await batch.commit()
+      setAwayOpen(false)
+    } finally {
+      setAwaySaving(false)
+    }
+  }
+
   const hour = parseInt(now.hh, 10)
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
-
-  function DayCard({ title, date }: { title: string; date: string }) {
-    const st = mealState(date)
-    const isToday = date === today
-    const lunchLocked = !canToggle(date, 'lunch', now)
-    const dinnerLocked = !canToggle(date, 'dinner', now)
-    const guestsLocked = isToday ? now.minutes >= DINNER_CUTOFF_MIN : date < today
-    const hint = (meal: 'lunch' | 'dinner', locked: boolean) => {
-      if (!isToday) return 'Free to change'
-      if (locked) return meal === 'lunch' ? 'Locked at 9:30 AM' : 'Locked at 6:00 PM'
-      return `Locks in ${fmtDuration(minutesToCutoff(meal, now))}`
-    }
-    return (
-      <motion.div
-        className="card p-5"
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <div className="text-xs font-bold uppercase tracking-wider text-ink/40">{title}</div>
-            <div className="font-extrabold">{dayLabel(date)}</div>
-          </div>
-          <CalendarDays size={18} className="text-ink/30" />
-        </div>
-        <div className="flex gap-3">
-          <MealSwitch
-            label="Lunch"
-            emoji="🍛"
-            on={st.lunch}
-            locked={lunchLocked}
-            hint={hint('lunch', lunchLocked)}
-            onToggle={() => write(date, { lunch: !st.lunch })}
-          />
-          <MealSwitch
-            label="Dinner"
-            emoji="🍲"
-            on={st.dinner}
-            locked={dinnerLocked}
-            hint={hint('dinner', dinnerLocked)}
-            onToggle={() => write(date, { dinner: !st.dinner })}
-          />
-        </div>
-        <div className="mt-3 flex items-center justify-between rounded-2xl bg-ink/4 px-4 py-2.5">
-          <span className="text-sm font-bold text-ink/60">🍽️ Guest meals</span>
-          <div className="flex items-center gap-3">
-            <button
-              className="btn-ghost w-8 h-8 rounded-xl"
-              disabled={guestsLocked || st.guests === 0}
-              onClick={() => write(date, { guests: Math.max(0, st.guests - 1) })}
-            >
-              <Minus size={14} />
-            </button>
-            <span className="font-extrabold w-5 text-center tabular-nums">{st.guests}</span>
-            <button
-              className="btn-ghost w-8 h-8 rounded-xl"
-              disabled={guestsLocked}
-              onClick={() => write(date, { guests: st.guests + 1 })}
-            >
-              <Plus size={14} />
-            </button>
-          </div>
-        </div>
-      </motion.div>
-    )
-  }
 
   return (
     <div className="space-y-6">
@@ -154,11 +271,51 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* Bazar duty banner */}
+      {/* Cook counts — tell the cook how many plates */}
       <motion.div
-        className="card p-5 bg-gradient-to-r from-sun-300/40 via-white to-mteal-300/25 overflow-hidden relative"
+        className="card p-5 bg-gradient-to-r from-brand-50 via-white to-sun-300/25"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-white flex items-center justify-center shadow-lg shadow-brand-500/30">
+            <ChefHat size={22} />
+          </div>
+          <div>
+            <div className="font-extrabold">Plates to cook</div>
+            <div className="text-xs font-semibold text-ink/45">members ON + guests</div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { label: 'Today', c: cookToday },
+            { label: 'Tomorrow', c: cookTomorrow },
+          ].map(({ label, c }) => (
+            <div key={label} className="rounded-2xl bg-white/80 border border-ink/6 p-3">
+              <div className="text-[10px] font-extrabold uppercase tracking-wider text-ink/40 mb-1.5">
+                {label}
+              </div>
+              <div className="flex items-center gap-4">
+                <div>
+                  <span className="text-2xl font-extrabold text-brand-600 tabular-nums">{c.lunch}</span>
+                  <span className="text-xs font-bold text-ink/50 ml-1">🍛 lunch</span>
+                </div>
+                <div>
+                  <span className="text-2xl font-extrabold text-mteal-600 tabular-nums">{c.dinner}</span>
+                  <span className="text-xs font-bold text-ink/50 ml-1">🍲 dinner</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </motion.div>
+
+      {/* Bazar duty banner */}
+      <motion.div
+        className="card p-5 bg-gradient-to-r from-sun-300/40 via-white to-mteal-300/25"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
       >
         <div className="flex items-center gap-4 flex-wrap">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sun-400 to-sun-600 text-white flex items-center justify-center shadow-lg shadow-sun-500/30">
@@ -184,12 +341,9 @@ export default function Dashboard() {
           </div>
           {dutyNext && (
             <div className="text-right">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-ink/40">
-                Up next
-              </div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Up next</div>
               <div className="font-bold text-sm">
-                {dutyMember(dutyNext.email)?.nickname ?? dutyNext.email} ·{' '}
-                {dayLabel(dutyNext.startDate)}
+                {dutyMember(dutyNext.email)?.nickname ?? dutyNext.email} · {dayLabel(dutyNext.startDate)}
               </div>
             </div>
           )}
@@ -198,45 +352,151 @@ export default function Dashboard() {
 
       {/* Today / tomorrow toggles */}
       <div className="grid md:grid-cols-2 gap-4">
-        <DayCard title="Today" date={today} />
-        <DayCard title="Tomorrow" date={tomorrow} />
+        <DayCard title="Today" date={today} now={now} st={stateFor(today)} onPatch={(p) => patchMeal(today, p)} />
+        <DayCard
+          title="Tomorrow"
+          date={tomorrow}
+          now={now}
+          st={stateFor(tomorrow)}
+          onPatch={(p) => patchMeal(tomorrow, p)}
+        />
       </div>
+
+      {/* Away mode */}
+      <motion.div className="card p-5" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Moon size={18} className="text-mteal-500" />
+            <h2 className="font-extrabold">Away mode</h2>
+            <span className="text-xs font-semibold text-ink/40 hidden sm:inline">
+              — turn meals off for a long period, no daily toggling
+            </span>
+          </div>
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            className="btn-teal px-4 py-2 text-sm"
+            onClick={() => {
+              setAwayMember(email)
+              setAwayLunch(true)
+              setAwayDinner(true)
+              setAwayStart(tomorrow)
+              setAwayEnd('')
+              setAwayOpen(true)
+            }}
+          >
+            <Moon size={14} /> Go away
+          </motion.button>
+        </div>
+        {activeAbsences.length === 0 ? (
+          <p className="text-sm text-ink/45 font-medium">
+            Nobody is away. Everyone's meals turn ON automatically every day.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {activeAbsences.map((a) => {
+              const m = members.find((x) => x.email === a.email)
+              const canCancel = isManager || a.email === email
+              return (
+                <div key={a.id} className="flex items-center gap-2 rounded-2xl bg-ink/3 border border-ink/8 px-3 py-2">
+                  <Avatar name={m?.name ?? a.email} size="sm" />
+                  <div>
+                    <div className="font-bold text-sm leading-tight">
+                      {m?.nickname ?? a.email}
+                      <span className="chip bg-rose-100 text-rose-600 ml-2 !py-0.5">
+                        {a.lunch && a.dinner ? 'both off' : a.lunch ? 'lunch off' : 'dinner off'}
+                      </span>
+                    </div>
+                    <div className="text-[11px] font-semibold text-ink/45">
+                      {dayLabel(a.startDate)} → {a.endDate ? dayLabel(a.endDate) : 'until back'}
+                    </div>
+                  </div>
+                  {canCancel && (
+                    <button
+                      className="btn-ghost p-1.5 rounded-lg text-rose-500"
+                      onClick={() => a.id && deleteDoc(doc(db, 'absences', a.id))}
+                      title="Cancel leave (meals auto ON again)"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </motion.div>
 
       {/* Month stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          icon={<UtensilsCrossed size={20} />}
-          label="My meals"
-          value={String(myMeals)}
-          sub={`mess total ${totalMeals}`}
-          accent="brand"
-          delay={0.05}
-        />
-        <StatCard
-          icon={<Wallet size={20} />}
-          label="My bazar"
-          value={fmtTk(myBazar)}
-          sub="spent from my pocket"
-          accent="teal"
-          delay={0.1}
-        />
-        <StatCard
-          icon={<ShoppingBasket size={20} />}
-          label="Total bazar"
-          value={fmtTk(totalBazar)}
-          sub={`${bazar.length} entries`}
-          accent="sun"
-          delay={0.15}
-        />
-        <StatCard
-          icon={<TrendingUp size={20} />}
-          label="Live meal rate"
-          value={fmtTk(rate)}
-          sub="so far this month"
-          accent="ink"
-          delay={0.2}
-        />
+        <StatCard icon={<UtensilsCrossed size={20} />} label="My meals" value={String(myMeals)} sub={`mess total ${totalMeals}`} accent="brand" delay={0.05} />
+        <StatCard icon={<Wallet size={20} />} label="My bazar" value={fmtTk(myBazar)} sub="spent from my pocket" accent="teal" delay={0.1} />
+        <StatCard icon={<ShoppingBasket size={20} />} label="Total bazar" value={fmtTk(totalBazar)} sub={`${bazar.length} entries`} accent="sun" delay={0.15} />
+        <StatCard icon={<TrendingUp size={20} />} label="Live meal rate" value={fmtTk(rate)} sub="so far this month" accent="ink" delay={0.2} />
       </div>
+
+      {/* Away modal */}
+      <Modal open={awayOpen} onClose={() => setAwayOpen(false)} title="Away mode — long meal off">
+        <div className="space-y-4">
+          {isManager && (
+            <div>
+              <label className="label">Member</label>
+              <select className="input" value={awayMember} onChange={(e) => setAwayMember(e.target.value)}>
+                {activeMembers.map((m) => (
+                  <option key={m.email} value={m.email}>
+                    {m.nickname}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div>
+            <label className="label">Which meals stay OFF?</label>
+            <div className="flex gap-3">
+              {[
+                { label: '🍛 Lunch', val: awayLunch, set: setAwayLunch },
+                { label: '🍲 Dinner', val: awayDinner, set: setAwayDinner },
+              ].map(({ label, val, set }) => (
+                <label
+                  key={label}
+                  className={`flex-1 flex items-center gap-2 rounded-2xl border-2 px-4 py-3 cursor-pointer font-bold text-sm transition
+                    ${val ? 'border-rose-400 bg-rose-50 text-rose-700' : 'border-ink/10 text-ink/50'}`}
+                >
+                  <input type="checkbox" className="accent-rose-500 w-4 h-4" checked={val} onChange={(e) => set(e.target.checked)} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">From</label>
+              <input
+                className="input"
+                type="date"
+                value={awayStart}
+                min={isManager ? undefined : tomorrow}
+                onChange={(e) => setAwayStart(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="label">Until (empty = until back)</label>
+              <input className="input" type="date" value={awayEnd} min={awayStart} onChange={(e) => setAwayEnd(e.target.value)} />
+            </div>
+          </div>
+          <p className="text-xs text-ink/45 font-medium">
+            Meals stay OFF for the whole period. You can still turn a single day back ON from the
+            calendar, or cancel the leave any time — then everything is auto ON again.
+          </p>
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            className="btn-primary w-full py-3"
+            onClick={saveAway}
+            disabled={awaySaving || (!awayLunch && !awayDinner)}
+          >
+            {awaySaving ? 'Saving…' : 'Start away mode'}
+          </motion.button>
+        </div>
+      </Modal>
     </div>
   )
 }

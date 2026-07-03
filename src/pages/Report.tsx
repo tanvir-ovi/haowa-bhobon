@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import { useBazar, useExpenses, useMeals, useMonthSnapshot } from '../hooks/useData'
+import { useAbsences, useBazar, useExpenses, useMeals, useMonthSnapshot } from '../hooks/useData'
 import MonthPicker from '../components/MonthPicker'
 import Avatar from '../components/Avatar'
 import Skeleton from '../components/Skeleton'
@@ -29,6 +29,7 @@ export default function Report() {
   const now = dhakaNow()
   const [month, setMonth] = useState(monthOf(now.date))
   const { meals, loading: mealsLoading } = useMeals(month)
+  const { absences } = useAbsences()
   const { entries, loading: bazarLoading } = useBazar(month)
   const { expenses } = useExpenses(month)
   const { snapshot } = useMonthSnapshot(month)
@@ -40,7 +41,7 @@ export default function Report() {
   const loading = mealsLoading || bazarLoading
 
   // Finalized months render from the immutable snapshot; live months compute.
-  const live = computeSettlement(activeMembers, meals, entries, expenses, month, upto)
+  const live = computeSettlement(activeMembers, meals, absences, entries, expenses, month, upto)
   const data: Settlement = snapshot
     ? {
         month: snapshot.month,

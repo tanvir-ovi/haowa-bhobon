@@ -17,7 +17,21 @@ export interface MealDoc {
   email: string
   lunch: boolean
   dinner: boolean
-  guests: number
+  guestsLunch?: number
+  guestsDinner?: number
+  guests?: number // legacy combined guest count, still honored in totals
+}
+
+// Long leave: meals auto-off over a date range without daily toggling.
+// endDate '' = open-ended (until cancelled). Explicit day toggles override.
+export interface AbsenceDoc {
+  id?: string
+  email: string
+  lunch: boolean
+  dinner: boolean
+  startDate: string
+  endDate: string // '' = until cancelled
+  createdAt?: unknown
 }
 
 export interface BazarItem {

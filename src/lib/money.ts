@@ -1,7 +1,7 @@
 // All settlement math runs on integer paisa (1 Tk = 100 paisa) so that
 // floating-point drift can never make member totals disagree with the
 // month totals. Rounding remainders are distributed deterministically.
-import type { BazarEntry, ExpenseDoc, MealDoc, Member } from '../types'
+import type { AbsenceDoc, BazarEntry, ExpenseDoc, MealDoc, Member } from '../types'
 import { countMeals, fmtTk } from './utils'
 
 export const toPaisa = (tk: number): number => Math.round((tk || 0) * 100)
@@ -62,12 +62,13 @@ export interface Settlement {
 export function computeSettlement(
   activeMembers: Member[],
   meals: Map<string, MealDoc>,
+  absences: AbsenceDoc[],
   entries: BazarEntry[],
   expenses: ExpenseDoc,
   month: string,
   upto: string,
 ): Settlement {
-  const mealCounts = activeMembers.map((m) => countMeals(meals, m.email, month, upto))
+  const mealCounts = activeMembers.map((m) => countMeals(meals, absences, m.email, month, upto))
   const totalMeals = mealCounts.reduce((s, c) => s + c, 0)
   const totalBazarPaisa = entries.reduce((s, e) => s + toPaisa(e.total), 0)
 
