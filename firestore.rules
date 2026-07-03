@@ -1,0 +1,94 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    // Bootstrap super-admin: can always act as admin, even before the
+    // members collection is seeded.
+    function bootstrapAdmin() {
+      return request.auth != null
+        && request.auth.token.email == 'tanvirovi6@gmail.com';
+    }
+
+    function authed() {
+      return request.auth != null && request.auth.token.email != null;
+    }
+
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function myDoc() {
+      return get(/databases/$(db)/documents/members/$(myEmail())).data;
+    }
+
+    function isMember() {
+      return authed()
+        && exists(/databases/$(db)/documents/members/$(myEmail()))
+        && myDoc().active == true;
+    }
+
+    function isAdmin() {
+      return bootstrapAdmin() || (isMember() && myDoc().role == 'admin');
+    }
+
+    function isManager() {
+      return isAdmin() || (isMember() && myDoc().role == 'manager');
+    }
+
+    // Member profiles. Doc id = lowercase email (or "pending-x" for members
+    // without an email yet). A signed-in user may fetch only their own doc
+    // for the membership check; the full roster is member-only.
+    match /members/{id} {
+      allow get: if isAdmin() || (authed() && (id == myEmail() || isMember()));
+      allow list: if isMember() || isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || (isMember()
+          && id == myEmail()
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.active == resource.data.active);
+    }
+
+    // Meal on/off docs. Doc id = YYYY-MM-DD_memberId.
+    match /meals/{id} {
+      allow read: if isMember();
+      allow write: if isManager()
+        || (isMember() && request.resource.data.email == myEmail());
+      allow delete: if isManager();
+    }
+
+    // Bazar entries (groceries a member bought with his own money).
+    match /bazar/{id} {
+      allow read: if isMember();
+      allow create: if isManager()
+        || (isMember() && request.resource.data.email == myEmail());
+      allow update, delete: if isManager()
+        || (isMember() && resource.data.email == myEmail());
+    }
+
+    // Monthly utility bills. Doc id = YYYY-MM.
+    match /expenses/{month} {
+      allow read: if isMember();
+      allow write: if isManager();
+    }
+
+    // Bazar duty schedule (3-day cycles). Assigned by manager/admin.
+    match /duty/{id} {
+      allow read: if isMember();
+      allow write: if isManager();
+    }
+
+    // Immutable month-end settlement snapshots. Doc id = YYYY-MM.
+    match /months/{month} {
+      allow read: if isMember();
+      allow create: if isManager();
+      allow delete: if isAdmin();
+      allow update: if false;
+    }
+
+    match /settings/{id} {
+      allow read: if isMember();
+      allow write: if isAdmin();
+    }
+  }
+}

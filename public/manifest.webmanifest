@@ -1,0 +1,12 @@
+{
+  "name": "Haowa Bhobon — Mess Manager",
+  "short_name": "Haowa Bhobon",
+  "description": "Mess meal, bazar and bill manager",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFF7EC",
+  "theme_color": "#E4362C",
+  "icons": [
+    { "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
