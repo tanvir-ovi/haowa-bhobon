@@ -93,6 +93,19 @@ body {
   @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold;
 }
 
+/* Gentle lift on pointer devices for a premium feel */
+@media (hover: hover) {
+  .card {
+    transition:
+      transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 40px -14px rgba(82, 16, 12, 0.22);
+  }
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

@@ -96,6 +96,13 @@ service cloud.firestore {
       allow update: if false;
     }
 
+    // Shared bazar menu — custom items any member adds for everyone.
+    match /menu/{id} {
+      allow read: if isMember();
+      allow create: if isMember();
+      allow update, delete: if isManager();
+    }
+
     match /settings/{id} {
       allow read: if isMember();
       allow write: if isAdmin();

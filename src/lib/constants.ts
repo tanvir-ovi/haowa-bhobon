@@ -8,7 +8,7 @@ export const BOOTSTRAP_ADMIN = 'tanvirovi6@gmail.com'
 // Cutoffs in minutes since midnight, Asia/Dhaka
 export const LUNCH_CUTOFF_MIN = 9 * 60 + 30 // 09:30
 export const DINNER_CUTOFF_MIN = 18 * 60 // 18:00
-export const KHALA_DEFAULT = 500 // cook bill per person (Tk)
+export const KHALA_DEFAULT_PAISA = 500 * 100 // cook bill per person
 export const DUTY_DAYS = 3
 
 // Doc id = lowercase email for real members. Pending members (no email yet)
@@ -24,7 +24,6 @@ export const SEED_MEMBERS: Member[] = [
   { email: 'pending-sohan', name: 'Sohan', nickname: 'Sohan', phone: '', role: 'member', active: true },
   { email: 'pending-zihan', name: 'Zihan', nickname: 'Zihan', phone: '', role: 'member', active: true },
   { email: 'pending-mamun', name: 'Mamun', nickname: 'Mamun', phone: '', role: 'member', active: true },
-  { email: 'pending-shihan', name: 'Shihan', nickname: 'Shihan', phone: '', role: 'member', active: true },
 ]
 
 export const isRealEmail = (id: string): boolean => id.includes('@')
@@ -42,6 +41,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { name: 'Chicken', emoji: '🍗', unit: 'kg' },
   { name: 'Beef', emoji: '🥩', unit: 'kg' },
   { name: 'Rui Fish', emoji: '🐟', unit: 'kg' },
+  { name: 'Katla Fish', emoji: '🐡', unit: 'kg' },
   { name: 'Pabda Fish', emoji: '🐠', unit: 'kg' },
   { name: 'Other Fish', emoji: '🎣', unit: 'kg' },
   { name: 'Eggs', emoji: '🥚', unit: 'dozen' },

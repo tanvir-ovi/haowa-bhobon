@@ -1,8 +1,16 @@
 import { useEffect, useState } from 'react'
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../firebase'
-import type { AbsenceDoc, BazarEntry, DutyDoc, ExpenseDoc, MealDoc, MonthSnapshot } from '../types'
-import { KHALA_DEFAULT } from '../lib/constants'
+import type {
+  AbsenceDoc,
+  BazarEntry,
+  DutyDoc,
+  ExpenseDoc,
+  MealDoc,
+  MenuItemDoc,
+  MonthSnapshot,
+} from '../types'
+import { KHALA_DEFAULT_PAISA } from '../lib/constants'
 
 export function useMeals(month: string): { meals: Map<string, MealDoc>; loading: boolean } {
   const [meals, setMeals] = useState<Map<string, MealDoc>>(new Map())
@@ -48,14 +56,14 @@ export function useBazar(month: string): { entries: BazarEntry[]; loading: boole
 export function emptyExpenses(month: string): ExpenseDoc {
   return {
     month,
-    wifi: 0,
-    water: 0,
-    gas: 0,
-    electricity: 0,
-    newspaper: 0,
-    other: 0,
+    wifiPaisa: 0,
+    waterPaisa: 0,
+    gasPaisa: 0,
+    electricityPaisa: 0,
+    newspaperPaisa: 0,
+    otherPaisa: 0,
     otherNote: '',
-    khalaPerPerson: KHALA_DEFAULT,
+    khalaPerPersonPaisa: KHALA_DEFAULT_PAISA,
   }
 }
 
@@ -119,6 +127,26 @@ export function useMonthSnapshot(month: string): {
     )
   }, [month])
   return { snapshot, loading }
+}
+
+// Custom menu items added by members, merged with the built-in menu.
+export function useMenu(): { customMenu: MenuItemDoc[]; loading: boolean } {
+  const [customMenu, setCustomMenu] = useState<MenuItemDoc[]>([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    return onSnapshot(
+      collection(db, 'menu'),
+      (snap) => {
+        const list: MenuItemDoc[] = []
+        snap.forEach((d) => list.push({ ...(d.data() as MenuItemDoc), id: d.id }))
+        list.sort((a, b) => a.name.localeCompare(b.name))
+        setCustomMenu(list)
+        setLoading(false)
+      },
+      () => setLoading(false),
+    )
+  }, [])
+  return { customMenu, loading }
 }
 
 // Away ranges are few and can span months, so subscribe to all of them.

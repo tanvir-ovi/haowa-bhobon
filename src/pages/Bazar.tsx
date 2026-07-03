@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   addDoc,
@@ -11,17 +11,23 @@ import {
 import { CalendarRange, Pencil, Plus, Search, ShoppingBasket, Trash2 } from 'lucide-react'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import { useBazar, useDuty } from '../hooks/useData'
+import { useBazar, useDuty, useMenu } from '../hooks/useData'
 import MonthPicker from '../components/MonthPicker'
 import Modal from '../components/Modal'
 import Avatar from '../components/Avatar'
 import Skeleton from '../components/Skeleton'
 import { DUTY_DAYS, MENU_ITEMS, UNITS } from '../lib/constants'
-import { addDays, dayLabel, dhakaNow, fmtTk, monthOf } from '../lib/utils'
+import { addDays, dayLabel, dhakaNow, monthOf } from '../lib/utils'
+import { fmtPaisa, toPaisa } from '../lib/money'
 import type { BazarEntry, BazarItem } from '../types'
 
-interface ItemRow extends BazarItem {
+interface ItemRow {
   key: number
+  name: string
+  emoji: string
+  qty: number
+  unit: string
+  priceTk: number // edited in Tk, stored as integer paisa
 }
 
 export default function Bazar() {
@@ -30,6 +36,7 @@ export default function Bazar() {
   const [month, setMonth] = useState(monthOf(now.date))
   const { entries, loading } = useBazar(month)
   const { duty } = useDuty(month)
+  const { customMenu } = useMenu()
   const myEmail = (member?.email ?? user?.email ?? '').toLowerCase()
 
   // ---- entry modal state ----
@@ -42,7 +49,7 @@ export default function Bazar() {
   const [search, setSearch] = useState('')
   const [customName, setCustomName] = useState('')
   const [saving, setSaving] = useState(false)
-  let keySeq = useMemo(() => ({ n: 0 }), [entryOpen])
+  const keySeq = useRef(0)
 
   // ---- duty modal state ----
   const [dutyOpen, setDutyOpen] = useState(false)
@@ -50,18 +57,25 @@ export default function Bazar() {
   const [dutyStart, setDutyStart] = useState(now.date)
   const [dutyEnd, setDutyEnd] = useState(addDays(now.date, DUTY_DAYS - 1))
 
-  const total = items.reduce((s, i) => s + (Number(i.price) || 0), 0)
+  const totalPaisa = items.reduce((s, i) => s + toPaisa(Number(i.priceTk) || 0), 0)
 
   const nickOf = (em: string) => members.find((m) => m.email === em)?.nickname ?? em
   const nameOf = (em: string) => members.find((m) => m.email === em)?.name ?? em
 
+  // Built-in menu + everyone's custom items, deduplicated by name.
+  const fullMenu = useMemo(() => {
+    const seen = new Set(MENU_ITEMS.map((m) => m.name.toLowerCase()))
+    const extras = customMenu.filter((m) => !seen.has(m.name.toLowerCase()))
+    return [...MENU_ITEMS, ...extras]
+  }, [customMenu])
+
   const totalsByMember = useMemo(() => {
     const map = new Map<string, number>()
-    for (const e of entries) map.set(e.email, (map.get(e.email) ?? 0) + e.total)
+    for (const e of entries) map.set(e.email, (map.get(e.email) ?? 0) + (e.totalPaisa || 0))
     return [...map.entries()].sort((a, b) => b[1] - a[1])
   }, [entries])
 
-  const grandTotal = entries.reduce((s, e) => s + e.total, 0)
+  const grandTotalPaisa = entries.reduce((s, e) => s + (e.totalPaisa || 0), 0)
 
   const entriesByDate = useMemo(() => {
     const map = new Map<string, BazarEntry[]>()
@@ -73,7 +87,7 @@ export default function Bazar() {
     return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]))
   }, [entries])
 
-  const filteredMenu = MENU_ITEMS.filter((m) =>
+  const filteredMenu = fullMenu.filter((m) =>
     m.name.toLowerCase().includes(search.trim().toLowerCase()),
   )
 
@@ -93,35 +107,61 @@ export default function Bazar() {
     setDate(e.date)
     setPayer(e.email)
     setNote(e.note)
-    setItems(e.items.map((it, i) => ({ ...it, key: i })))
-    keySeq.n = e.items.length
+    setItems(
+      e.items.map((it, i) => ({
+        key: i,
+        name: it.name,
+        emoji: it.emoji,
+        qty: it.qty,
+        unit: it.unit,
+        priceTk: (it.pricePaisa || 0) / 100,
+      })),
+    )
+    keySeq.current = e.items.length
     setSearch('')
     setCustomName('')
     setEntryOpen(true)
   }
 
   function addItem(name: string, emoji: string, unit: string) {
-    setItems((list) => [...list, { key: keySeq.n++, name, emoji, qty: 1, unit, price: 0 }])
+    setItems((list) => [
+      ...list,
+      { key: keySeq.current++, name, emoji, qty: 1, unit, priceTk: 0 },
+    ])
   }
 
-  function patchItem(key: number, patch: Partial<BazarItem>) {
+  // Custom items join the shared menu so the whole mess can reuse them.
+  async function addCustomItem() {
+    const name = customName.trim()
+    if (!name) return
+    addItem(name, '📦', 'pcs')
+    setCustomName('')
+    const exists = fullMenu.some((m) => m.name.toLowerCase() === name.toLowerCase())
+    if (!exists) {
+      await addDoc(collection(db, 'menu'), { name, emoji: '📦', unit: 'pcs' })
+    }
+  }
+
+  function patchItem(key: number, patch: Partial<ItemRow>) {
     setItems((list) => list.map((i) => (i.key === key ? { ...i, ...patch } : i)))
   }
 
   async function saveEntry() {
     if (items.length === 0 || saving) return
     setSaving(true)
-    const clean: BazarItem[] = items.map(({ key: _k, ...it }) => ({
-      ...it,
+    const clean: BazarItem[] = items.map((it) => ({
+      name: it.name,
+      emoji: it.emoji,
       qty: Number(it.qty) || 0,
-      price: Number(it.price) || 0,
+      unit: it.unit,
+      pricePaisa: toPaisa(Number(it.priceTk) || 0),
     }))
     const payload = {
       date,
       month: monthOf(date),
       email: payer,
       items: clean,
-      total: clean.reduce((s, i) => s + i.price, 0),
+      totalPaisa: clean.reduce((s, i) => s + i.pricePaisa, 0),
       note: note.trim(),
     }
     try {
@@ -138,7 +178,8 @@ export default function Bazar() {
 
   async function removeEntry(e: BazarEntry) {
     if (!e.id) return
-    if (!window.confirm(`Delete this ${fmtTk(e.total)} bazar entry by ${nickOf(e.email)}?`)) return
+    if (!window.confirm(`Delete this ${fmtPaisa(e.totalPaisa)} bazar entry by ${nickOf(e.email)}?`))
+      return
     await deleteDoc(doc(db, 'bazar', e.id))
   }
 
@@ -176,7 +217,7 @@ export default function Bazar() {
       <motion.div className="card p-5" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-extrabold flex items-center gap-2">
-            <CalendarRange size={18} className="text-mteal-500" /> Duty roster ({DUTY_DAYS}-day cycles)
+            <CalendarRange size={18} className="text-mteal-500" /> Duty roster
           </h2>
           {isManager && (
             <motion.button
@@ -242,7 +283,7 @@ export default function Bazar() {
           <h2 className="font-extrabold flex items-center gap-2">
             <ShoppingBasket size={18} className="text-brand-500" /> Paid this month
           </h2>
-          <span className="chip bg-brand-50 text-brand-700 text-sm">Total {fmtTk(grandTotal)}</span>
+          <span className="chip bg-brand-50 text-brand-700 text-sm">Total {fmtPaisa(grandTotalPaisa)}</span>
         </div>
         {totalsByMember.length === 0 ? (
           <p className="text-sm text-ink/45 font-medium">No bazar entries yet.</p>
@@ -252,7 +293,7 @@ export default function Bazar() {
               <div key={em} className="flex items-center gap-2 rounded-2xl bg-ink/3 px-3 py-1.5">
                 <Avatar name={nameOf(em)} size="sm" />
                 <span className="font-bold text-sm">{nickOf(em)}</span>
-                <span className="chip bg-mteal-500/10 text-mteal-600">{fmtTk(amt)}</span>
+                <span className="chip bg-mteal-500/10 text-mteal-600">{fmtPaisa(amt)}</span>
               </div>
             ))}
           </div>
@@ -283,7 +324,7 @@ export default function Bazar() {
                     <div className="flex items-center gap-3 mb-2">
                       <Avatar name={nameOf(e.email)} size="sm" />
                       <span className="font-extrabold text-sm flex-1">{nickOf(e.email)}</span>
-                      <span className="font-extrabold text-brand-600">{fmtTk(e.total)}</span>
+                      <span className="font-extrabold text-brand-600">{fmtPaisa(e.totalPaisa)}</span>
                       {canEditEntry(e) && (
                         <div className="flex gap-1 no-print">
                           <button className="btn-ghost p-2 rounded-xl" onClick={() => openEdit(e)} title="Edit">
@@ -302,7 +343,7 @@ export default function Bazar() {
                     <div className="flex flex-wrap gap-1.5">
                       {e.items.map((it, i) => (
                         <span key={i} className="chip bg-ink/4 text-ink/70">
-                          {it.emoji} {it.name} · {it.qty} {it.unit} · {fmtTk(it.price)}
+                          {it.emoji} {it.name} · {it.qty} {it.unit} · {fmtPaisa(it.pricePaisa)}
                         </span>
                       ))}
                     </div>
@@ -380,19 +421,17 @@ export default function Bazar() {
                 placeholder="Custom item name…"
                 value={customName}
                 onChange={(e) => setCustomName(e.target.value)}
-              />
-              <button
-                className="btn-ghost px-4 shrink-0"
-                onClick={() => {
-                  if (customName.trim()) {
-                    addItem(customName.trim(), '📦', 'pcs')
-                    setCustomName('')
-                  }
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void addCustomItem()
                 }}
-              >
+              />
+              <button className="btn-ghost px-4 shrink-0" onClick={addCustomItem}>
                 <Plus size={15} /> Add
               </button>
             </div>
+            <p className="text-[11px] text-ink/40 font-semibold mt-1">
+              Custom items are saved to the shared menu for everyone.
+            </p>
           </div>
 
           {/* item rows */}
@@ -426,9 +465,9 @@ export default function Bazar() {
                     type="number"
                     min={0}
                     step="any"
-                    value={it.price || ''}
+                    value={it.priceTk || ''}
                     placeholder="Tk"
-                    onChange={(e) => patchItem(it.key, { price: Number(e.target.value) })}
+                    onChange={(e) => patchItem(it.key, { priceTk: Number(e.target.value) })}
                     title="Price (Tk)"
                   />
                   <button
@@ -455,7 +494,7 @@ export default function Bazar() {
           <div className="flex items-center justify-between pt-2 border-t border-ink/8">
             <div>
               <div className="text-xs font-bold uppercase tracking-wider text-ink/40">Total</div>
-              <div className="text-2xl font-extrabold text-brand-600">{fmtTk(total)}</div>
+              <div className="text-2xl font-extrabold text-brand-600">{fmtPaisa(totalPaisa)}</div>
             </div>
             <motion.button
               whileTap={{ scale: 0.95 }}
@@ -502,8 +541,7 @@ export default function Bazar() {
             </div>
           </div>
           <p className="text-xs text-ink/45 font-medium">
-            Covers {dayLabel(dutyStart)} → {dayLabel(dutyEnd)} (usually {DUTY_DAYS} days, but any
-            range works)
+            Covers {dayLabel(dutyStart)} → {dayLabel(dutyEnd)} (usually {DUTY_DAYS} days, but any range works)
           </p>
           <motion.button
             whileTap={{ scale: 0.95 }}

@@ -18,16 +18,19 @@ import { useExpenses } from '../hooks/useData'
 import MonthPicker from '../components/MonthPicker'
 import Skeleton from '../components/Skeleton'
 import StatCard from '../components/StatCard'
-import { dhakaNow, fmtTk, monthOf } from '../lib/utils'
+import { dhakaNow, monthOf } from '../lib/utils'
+import { fmtPaisa, toPaisa } from '../lib/money'
 import type { ExpenseDoc } from '../types'
 
-const FIELDS: { key: keyof ExpenseDoc; label: string; icon: React.ReactNode }[] = [
-  { key: 'wifi', label: 'Wi-Fi', icon: <Wifi size={16} /> },
-  { key: 'water', label: 'Water', icon: <Droplets size={16} /> },
-  { key: 'gas', label: 'Gas', icon: <Flame size={16} /> },
-  { key: 'electricity', label: 'Electricity', icon: <Zap size={16} /> },
-  { key: 'newspaper', label: 'Newspaper', icon: <Newspaper size={16} /> },
-  { key: 'other', label: 'Other', icon: <PackagePlus size={16} /> },
+type PaisaField = Exclude<keyof ExpenseDoc, 'month' | 'otherNote'>
+
+const FIELDS: { key: PaisaField; label: string; icon: React.ReactNode }[] = [
+  { key: 'wifiPaisa', label: 'Wi-Fi', icon: <Wifi size={16} /> },
+  { key: 'waterPaisa', label: 'Water', icon: <Droplets size={16} /> },
+  { key: 'gasPaisa', label: 'Gas', icon: <Flame size={16} /> },
+  { key: 'electricityPaisa', label: 'Electricity', icon: <Zap size={16} /> },
+  { key: 'newspaperPaisa', label: 'Newspaper', icon: <Newspaper size={16} /> },
+  { key: 'otherPaisa', label: 'Other', icon: <PackagePlus size={16} /> },
 ]
 
 export default function Expenses() {
@@ -41,13 +44,17 @@ export default function Expenses() {
 
   useEffect(() => setForm(expenses), [expenses])
 
-  const num = (v: number) => (Number.isFinite(v) ? v : 0)
   const count = activeMembers.length
-  const billsTotal =
-    num(form.wifi) + num(form.water) + num(form.gas) + num(form.electricity) + num(form.newspaper) + num(form.other)
-  const khalaTotal = num(form.khalaPerPerson) * count
-  const grand = billsTotal + khalaTotal
-  const perHead = count > 0 ? billsTotal / count + num(form.khalaPerPerson) : 0
+  const billsPaisa =
+    form.wifiPaisa +
+    form.waterPaisa +
+    form.gasPaisa +
+    form.electricityPaisa +
+    form.newspaperPaisa +
+    form.otherPaisa
+  const khalaTotalPaisa = form.khalaPerPersonPaisa * count
+  const grandPaisa = billsPaisa + khalaTotalPaisa
+  const perHeadPaisa = count > 0 ? billsPaisa / count + form.khalaPerPersonPaisa : 0
 
   function patch(key: keyof ExpenseDoc, value: number | string) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -63,6 +70,9 @@ export default function Expenses() {
       setSaving(false)
     }
   }
+
+  // Inputs are edited in Tk; storage is integer paisa.
+  const tkValue = (paisa: number) => (paisa ? paisa / 100 : '')
 
   return (
     <div className="space-y-6">
@@ -91,10 +101,10 @@ export default function Expenses() {
                   type="number"
                   min={0}
                   step="any"
-                  value={(form[key] as number) || ''}
+                  value={tkValue(form[key] as number)}
                   placeholder="0"
                   disabled={!isManager}
-                  onChange={(e) => patch(key, Number(e.target.value))}
+                  onChange={(e) => patch(key, toPaisa(Number(e.target.value)))}
                 />
               </div>
             ))}
@@ -107,10 +117,10 @@ export default function Expenses() {
                 type="number"
                 min={0}
                 step="any"
-                value={form.khalaPerPerson || ''}
+                value={tkValue(form.khalaPerPersonPaisa)}
                 placeholder="500"
                 disabled={!isManager}
-                onChange={(e) => patch('khalaPerPerson', Number(e.target.value))}
+                onChange={(e) => patch('khalaPerPersonPaisa', toPaisa(Number(e.target.value)))}
               />
             </div>
             <div className="sm:col-span-2">
@@ -146,10 +156,10 @@ export default function Expenses() {
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={<Zap size={20} />} label="Bills total" value={fmtTk(billsTotal)} sub="wifi + water + gas + more" accent="sun" />
-        <StatCard icon={<ChefHat size={20} />} label="Cook total" value={fmtTk(khalaTotal)} sub={`${fmtTk(num(form.khalaPerPerson))} × ${count}`} accent="teal" delay={0.05} />
-        <StatCard icon={<PackagePlus size={20} />} label="Grand total" value={fmtTk(grand)} sub="all shared costs" accent="brand" delay={0.1} />
-        <StatCard icon={<Users size={20} />} label="Per member" value={fmtTk(perHead)} sub="added to each balance" accent="ink" delay={0.15} />
+        <StatCard icon={<Zap size={20} />} label="Bills total" value={fmtPaisa(billsPaisa)} sub="wifi + water + gas + more" accent="sun" />
+        <StatCard icon={<ChefHat size={20} />} label="Cook total" value={fmtPaisa(khalaTotalPaisa)} sub={`${fmtPaisa(form.khalaPerPersonPaisa)} × ${count}`} accent="teal" delay={0.05} />
+        <StatCard icon={<PackagePlus size={20} />} label="Grand total" value={fmtPaisa(grandPaisa)} sub="all shared costs" accent="brand" delay={0.1} />
+        <StatCard icon={<Users size={20} />} label="Per member" value={fmtPaisa(perHeadPaisa)} sub="added to each balance" accent="ink" delay={0.15} />
       </div>
     </div>
   )

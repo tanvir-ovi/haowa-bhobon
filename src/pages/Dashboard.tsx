@@ -38,12 +38,12 @@ import {
   mealKey,
   countMeals,
   resolveMeal,
-  fmtTk,
   dayLabel,
   monthLabel,
   type DhakaNow,
   type ResolvedMeal,
 } from '../lib/utils'
+import { fmtPaisa } from '../lib/money'
 import MealSwitch from '../components/MealSwitch'
 import StatCard from '../components/StatCard'
 import Avatar from '../components/Avatar'
@@ -217,9 +217,11 @@ export default function Dashboard() {
     (s, m) => s + countMeals(meals, absences, m.email, month, today),
     0,
   )
-  const totalBazar = bazar.reduce((s, e) => s + e.total, 0)
-  const myBazar = bazar.filter((e) => e.email === email).reduce((s, e) => s + e.total, 0)
-  const rate = totalMeals > 0 ? totalBazar / totalMeals : 0
+  const totalBazarPaisa = bazar.reduce((s, e) => s + (e.totalPaisa || 0), 0)
+  const myBazarPaisa = bazar
+    .filter((e) => e.email === email)
+    .reduce((s, e) => s + (e.totalPaisa || 0), 0)
+  const ratePaisa = totalMeals > 0 ? totalBazarPaisa / totalMeals : 0
 
   // Bazar duty
   const dutyToday = duty.find((d) => d.startDate <= today && today <= d.endDate)
@@ -429,9 +431,9 @@ export default function Dashboard() {
       {/* Month stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={<UtensilsCrossed size={20} />} label="My meals" value={String(myMeals)} sub={`mess total ${totalMeals}`} accent="brand" delay={0.05} />
-        <StatCard icon={<Wallet size={20} />} label="My bazar" value={fmtTk(myBazar)} sub="spent from my pocket" accent="teal" delay={0.1} />
-        <StatCard icon={<ShoppingBasket size={20} />} label="Total bazar" value={fmtTk(totalBazar)} sub={`${bazar.length} entries`} accent="sun" delay={0.15} />
-        <StatCard icon={<TrendingUp size={20} />} label="Live meal rate" value={fmtTk(rate)} sub="so far this month" accent="ink" delay={0.2} />
+        <StatCard icon={<Wallet size={20} />} label="My bazar" value={fmtPaisa(myBazarPaisa)} sub="spent from my pocket" accent="teal" delay={0.1} />
+        <StatCard icon={<ShoppingBasket size={20} />} label="Total bazar" value={fmtPaisa(totalBazarPaisa)} sub={`${bazar.length} entries`} accent="sun" delay={0.15} />
+        <StatCard icon={<TrendingUp size={20} />} label="Live meal rate" value={fmtPaisa(ratePaisa)} sub="so far this month" accent="ink" delay={0.2} />
       </div>
 
       {/* Away modal */}

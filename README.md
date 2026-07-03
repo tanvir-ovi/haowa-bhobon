@@ -1,97 +1,119 @@
+<div align="center">
+
+<img src="public/logo.svg" alt="Haowa Bhobon" width="96" />
+
 # Haowa Bhobon — Mess Manager
 
-A realtime web app for running the Haowa Bhobon mess: daily meal on/off with
-cutoff times, bazar (grocery) tracking with per-member spending, utility bills,
-and automatic month-end settlement. Installable on Android and iOS as a PWA.
+**A realtime, offline-first meal and expense manager for shared housing.**
+
+Daily meal scheduling · grocery (bazar) tracking · duty rotation · utility bills · exact month-end settlement
+
+[![Live](https://img.shields.io/badge/live-haowa--bhobon.web.app-E4362C)](https://haowa-bhobon.web.app)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![Firebase](https://img.shields.io/badge/Firebase-Auth%20%2B%20Firestore-FFCA28?logo=firebase&logoColor=black)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+</div>
+
+---
+
+## Overview
+
+Haowa Bhobon Mess Manager digitizes the daily operations of a shared mess:
+who eats which meal, who bought this week's groceries, what the shared bills
+are, and — at month end — exactly who pays and who receives. It replaces the
+paper ledger with a single source of truth that every member sees live on
+their phone.
+
+The app is an installable PWA: it runs on Android, iOS, and desktop from one
+codebase, works offline, and updates instantly for everyone on each deploy.
 
 ## Features
 
-- **Meals** — every member is ON for lunch and dinner by default. Lunch can be
-  turned off until **9:30 AM** and dinner until **6:00 PM** (Asia/Dhaka).
-  Future days can be toggled any time. Guest meals supported. Manager can
-  override locked days.
-- **Bazar** — members record groceries bought with their own money using an
-  emoji item picker (quantity, unit, price). The amount is credited to their
-  balance. The manager assigns 3-day bazar duty cycles.
-- **Bills** — Wi-Fi, water, gas, electricity, newspaper, cook bill
-  (default Tk 500/person) and other costs, split equally among active members.
-- **Report** — meal rate = total bazar ÷ total meals; per-member meal cost,
-  utility share, and final **To Pay / To Receive** balance. All math runs on
-  integer paisa with deterministic remainder distribution, so member rows always
-  sum exactly to the month totals. Reports can be shared straight to WhatsApp
-  via the system share sheet, printed, and finalized into an immutable snapshot.
-- **Members** — email allowlist login (Google or email/password). Roles:
-  admin, manager, member. Pending members (no email yet) count in reports but
-  cannot log in.
-- **Offline-first** — Firestore persistent cache; meal toggles apply instantly
-  and sync when back online.
+| | Feature | Details |
+|---|---|---|
+| 🍛 | **Meal scheduling** | Meals default ON daily. Lunch locks at 09:30, dinner at 18:00 (Asia/Dhaka). Future days toggle any time. |
+| 🌙 | **Away mode** | One tap turns lunch/dinner/both off across any date range — open-ended supported — with automatic return to ON. |
+| 👨‍🍳 | **Cook counts** | Live "plates to cook" for lunch and dinner, today and tomorrow, including guests. |
+| 🛒 | **Bazar tracking** | Emoji item picker with quantity, unit and price. Member-added custom items join the shared menu. Spending credits the buyer's balance. |
+| 🔄 | **Duty rotation** | The manager assigns bazar duty over any date range (3-day cycles by default). |
+| 💡 | **Utility bills** | Wi-Fi, water, gas, electricity, newspaper, cook salary and other costs, split equally among active members. |
+| 📊 | **Exact settlement** | All money stored as integer paisa. Proportional meal-cost allocation with deterministic remainder distribution — member rows always reconcile to the month totals, to the paisa. |
+| 🔒 | **Month finalize** | Freezes a month into an immutable snapshot; later edits cannot alter a settled month. |
+| 📤 | **One-tap share** | Sends the settlement summary to any messaging app via the system share sheet. |
+| 👥 | **Role-based access** | Admin, manager and member roles enforced by Firestore security rules — not just the UI. |
+| 📴 | **Offline-first** | Persistent local cache; meal toggles apply instantly and sync when back online. |
 
-## Tech stack
+## Architecture
 
-React 18 + TypeScript + Vite, Tailwind CSS 4, Framer Motion, Firebase
-(Authentication + Cloud Firestore + Hosting). Everything runs on free tiers.
+```
+React 18 + TypeScript (Vite)
+├── Tailwind CSS 4          design system, theming
+├── Framer Motion            micro-interactions, transitions
+└── Firebase
+    ├── Authentication       email/password + Google, allowlist gated
+    ├── Cloud Firestore      realtime data, offline persistence, security rules
+    └── Hosting              global CDN, free tier
+```
 
-## Setup (one time)
+**Financial integrity** — every stored amount is integer paisa (1 Tk = 100
+paisa). Settlement math uses largest-remainder allocation so that per-member
+costs sum *exactly* to the month totals; no floating-point drift can ever
+appear in anyone's balance.
 
-1. **Create a Firebase project** at <https://console.firebase.google.com>
-   (any name, e.g. `haowa-bhobon`). Disable Analytics if asked.
-2. **Authentication** → Get started → enable **Email/Password** and **Google**
-   sign-in providers.
-3. **Firestore Database** → Create database → production mode → region
-   `asia-south1` (Mumbai) or nearest.
-4. **Project settings → Your apps → Web** (`</>`): register an app and copy the
-   config values.
-5. In this folder, copy `.env.example` to `.env` and paste the values.
-6. Deploy the security rules — either paste `firestore.rules` into
-   Firestore → Rules in the console, or run:
+**Access model** — sign-in is open, but only emails present in the members
+collection can read or write mess data. Members without an email yet
+("pending") count in meals and bills but cannot log in. Rules enforce that a
+member can only modify their own meals, bazar entries and leaves; managers
+and admins hold elevated, audited powers.
 
-   ```bash
-   npm install -g firebase-tools
-   firebase login
-   firebase use <your-project-id>
-   firebase deploy --only firestore:rules
-   ```
-
-## Run locally
+## Getting started
 
 ```bash
+git clone https://github.com/tanvir-ovi/haowa-bhobon.git
+cd haowa-bhobon
 npm install
+cp .env.example .env   # paste your Firebase web app config
 npm run dev
 ```
 
-For phone preview on the same Wi-Fi:
+Create a free Firebase project, enable **Authentication** (Email/Password +
+Google) and **Cloud Firestore**, then copy the web app config into `.env`.
+Deploy the bundled security rules with:
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+### Mobile preview on your LAN
 
 ```bash
 npm run dev -- --host
 ```
 
-then open the LAN URL that Vite prints (e.g. `http://192.168.0.101:5173`).
+Open the printed LAN URL on any phone connected to the same Wi-Fi.
 
-## First login
-
-1. Sign in with **tanvirovi6@gmail.com** (Google button is easiest). This
-   account is the bootstrap admin.
-2. Go to **Members** → **Load roster** to seed all mess members.
-3. Other members sign in with their listed email. Anyone not on the list is
-   blocked automatically.
-
-## Deploy (free hosting)
+## Deployment
 
 ```bash
 npm run build
 firebase deploy --only hosting
 ```
 
-The app is served at `https://<project-id>.web.app`. Members can then install
-it from the browser menu ("Add to Home Screen") on Android and iOS.
+The site ships to `https://<project-id>.web.app`. Members install it from the
+browser menu (*Add to Home Screen*) on Android and iOS. Every deploy reaches
+all installed clients on their next launch — no app store round-trips.
 
-To publish updates automatically on every push to GitHub, run
-`firebase init hosting:github` once and accept the defaults — every push to
-`main` builds and deploys the site.
+## Monthly workflow
 
-## Monthly flow
+1. Members toggle meals daily (or set Away mode); guests are added per meal.
+2. The duty member records groceries right from the shop.
+3. The manager enters utility bills whenever they arrive.
+4. At month end: **Report → Finalize → Share** — everyone sees exactly who
+   pays and who receives.
 
-1. Members toggle meals daily; bazar duty members record their shopping.
-2. Manager enters utility bills any time during the month.
-3. At month end, open **Report**, verify, press **Finalize**, and **Share**
-   the settlement to the mess group.
+## License
+
+Released under the [MIT License](LICENSE).

@@ -70,23 +70,23 @@ export function computeSettlement(
 ): Settlement {
   const mealCounts = activeMembers.map((m) => countMeals(meals, absences, m.email, month, upto))
   const totalMeals = mealCounts.reduce((s, c) => s + c, 0)
-  const totalBazarPaisa = entries.reduce((s, e) => s + toPaisa(e.total), 0)
+  const totalBazarPaisa = entries.reduce((s, e) => s + (e.totalPaisa || 0), 0)
 
   const mealCostParts = allocateByWeight(totalBazarPaisa, mealCounts)
 
   const billsPaisa =
-    toPaisa(expenses.wifi) +
-    toPaisa(expenses.water) +
-    toPaisa(expenses.gas) +
-    toPaisa(expenses.electricity) +
-    toPaisa(expenses.newspaper) +
-    toPaisa(expenses.other)
+    (expenses.wifiPaisa || 0) +
+    (expenses.waterPaisa || 0) +
+    (expenses.gasPaisa || 0) +
+    (expenses.electricityPaisa || 0) +
+    (expenses.newspaperPaisa || 0) +
+    (expenses.otherPaisa || 0)
   const billShares = splitEqual(billsPaisa, activeMembers.length)
-  const khalaPerPersonPaisa = toPaisa(expenses.khalaPerPerson)
+  const khalaPerPersonPaisa = expenses.khalaPerPersonPaisa || 0
 
   const paidByMember = new Map<string, number>()
   for (const e of entries) {
-    paidByMember.set(e.email, (paidByMember.get(e.email) ?? 0) + toPaisa(e.total))
+    paidByMember.set(e.email, (paidByMember.get(e.email) ?? 0) + (e.totalPaisa || 0))
   }
 
   const rows: SettlementRow[] = activeMembers.map((m, i) => {

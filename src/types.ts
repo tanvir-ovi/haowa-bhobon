@@ -34,12 +34,14 @@ export interface AbsenceDoc {
   createdAt?: unknown
 }
 
+// All money is stored as integer paisa (1 Tk = 100 paisa) so stored
+// amounts are never subject to floating-point drift.
 export interface BazarItem {
   name: string
   emoji: string
   qty: number
   unit: string
-  price: number // Tk for this line
+  pricePaisa: number
 }
 
 export interface BazarEntry {
@@ -48,21 +50,29 @@ export interface BazarEntry {
   month: string
   email: string // who paid (bazar duty member)
   items: BazarItem[]
-  total: number // Tk
+  totalPaisa: number
   note: string
   createdAt?: unknown
 }
 
 export interface ExpenseDoc {
   month: string
-  wifi: number
-  water: number
-  gas: number
-  electricity: number
-  newspaper: number
-  other: number
+  wifiPaisa: number
+  waterPaisa: number
+  gasPaisa: number
+  electricityPaisa: number
+  newspaperPaisa: number
+  otherPaisa: number
   otherNote: string
-  khalaPerPerson: number
+  khalaPerPersonPaisa: number
+}
+
+// A custom bazar item a member added — becomes part of the shared menu.
+export interface MenuItemDoc {
+  id?: string
+  name: string
+  emoji: string
+  unit: string
 }
 
 export interface DutyDoc {
