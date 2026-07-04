@@ -12,6 +12,7 @@ import Bazar from './pages/Bazar'
 import Expenses from './pages/Expenses'
 import Report from './pages/Report'
 import Members from './pages/Members'
+import Admin from './pages/Admin'
 import { BOOTSTRAP_ADMIN, MESS_NAME } from './lib/constants'
 
 function CenterCard({ children }: { children: React.ReactNode }) {
@@ -153,6 +154,7 @@ export default function App() {
         <Route path="/expenses" element={<Expenses />} />
         <Route path="/report" element={<Report />} />
         <Route path="/members" element={<Members />} />
+        <Route path="/admin" element={isAdmin ? <Admin /> : <Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

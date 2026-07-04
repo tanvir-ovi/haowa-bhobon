@@ -7,6 +7,7 @@ import {
   Receipt,
   PieChart,
   Users,
+  Shield,
   LogOut,
 } from 'lucide-react'
 import Logo from './Logo'
@@ -23,6 +24,7 @@ const NAV = [
   { to: '/expenses', label: 'Bills', icon: Receipt },
   { to: '/report', label: 'Report', icon: PieChart },
   { to: '/members', label: 'Members', icon: Users },
+  { to: '/admin', label: 'Admin', icon: Shield, adminOnly: true },
 ]
 
 function Clock() {
@@ -40,9 +42,10 @@ function Clock() {
 }
 
 export default function Layout() {
-  const { member, user, logout } = useAuth()
+  const { member, user, logout, isAdmin } = useAuth()
   const location = useLocation()
   const displayName = member?.nickname || user?.email || ''
+  const nav = NAV.filter((item) => !item.adminOnly || isAdmin)
 
   return (
     <div className="min-h-dvh lg:pl-64">
@@ -59,7 +62,7 @@ export default function Layout() {
             </div>
           </div>
           <nav className="mt-4 flex flex-col gap-1">
-            {NAV.map(({ to, label, icon: Icon }) => (
+            {nav.map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -134,7 +137,7 @@ export default function Layout() {
       {/* Mobile bottom nav */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 px-3 pb-3 no-print">
         <div className="card flex justify-around px-1 py-1.5 rounded-3xl">
-          {NAV.map(({ to, label, icon: Icon }) => (
+          {nav.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
