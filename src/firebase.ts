@@ -31,6 +31,10 @@ if (firebaseReady) {
     // spotty connections; local writes sync when back online.
     dbInstance = initializeFirestore(app, {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      // Some Android browsers/data-saver proxies break Firestore's streaming
+      // transport; auto-detection falls back to long-polling so the app
+      // still loads instead of hanging forever.
+      experimentalAutoDetectLongPolling: true,
     })
   } catch {
     dbInstance = getFirestore(app)

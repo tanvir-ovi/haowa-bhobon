@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from './context/AuthContext'
@@ -44,9 +45,42 @@ function SetupScreen() {
   )
 }
 
+// Wipes every local store the app uses. Rescues devices where a corrupt
+// or lock-stuck IndexedDB keeps Firestore from ever answering.
+async function resetAppData() {
+  try {
+    localStorage.clear()
+    sessionStorage.clear()
+    if (typeof indexedDB.databases === 'function') {
+      const dbs = await indexedDB.databases()
+      await Promise.all(
+        dbs.map(
+          (d) =>
+            d.name &&
+            new Promise((resolve) => {
+              const req = indexedDB.deleteDatabase(d.name as string)
+              req.onsuccess = req.onerror = req.onblocked = () => resolve(null)
+            }),
+        ),
+      )
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys()
+      await Promise.all(keys.map((k) => caches.delete(k)))
+    }
+  } finally {
+    window.location.reload()
+  }
+}
+
 function LoadingScreen() {
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setSlow(true), 12000)
+    return () => clearTimeout(t)
+  }, [])
   return (
-    <div className="min-h-dvh flex flex-col items-center justify-center gap-4">
+    <div className="min-h-dvh flex flex-col items-center justify-center gap-4 p-6">
       <motion.div
         animate={{ rotate: [0, 8, -8, 0], scale: [1, 1.06, 1] }}
         transition={{ repeat: Infinity, duration: 1.6, ease: 'easeInOut' }}
@@ -54,6 +88,27 @@ function LoadingScreen() {
         <Logo size={84} />
       </motion.div>
       <div className="font-bold text-lg text-ink/60">{MESS_NAME}</div>
+      {slow && (
+        <motion.div
+          className="card p-5 max-w-sm w-full text-center mt-2"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <p className="text-sm font-bold text-ink/70 mb-1">Taking longer than usual?</p>
+          <p className="text-xs text-ink/50 font-medium mb-4">
+            Close other tabs of this site, check your internet, or reset the app's local data —
+            your account and mess data stay safe on the server.
+          </p>
+          <div className="flex gap-2 justify-center">
+            <button className="btn-teal px-5 py-2.5 text-sm" onClick={() => window.location.reload()}>
+              Retry
+            </button>
+            <button className="btn-ghost px-5 py-2.5 text-sm" onClick={resetAppData}>
+              Reset app data
+            </button>
+          </div>
+        </motion.div>
+      )}
     </div>
   )
 }
