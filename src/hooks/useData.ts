@@ -63,7 +63,7 @@ export function emptyExpenses(month: string): ExpenseDoc {
     newspaperPaisa: 0,
     otherPaisa: 0,
     otherNote: '',
-    khalaPerPersonPaisa: KHALA_DEFAULT_PAISA,
+    khalaTotalPaisa: KHALA_DEFAULT_PAISA,
   }
 }
 

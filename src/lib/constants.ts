@@ -8,7 +8,7 @@ export const BOOTSTRAP_ADMIN = 'tanvirovi6@gmail.com'
 // Cutoffs in minutes since midnight, Asia/Dhaka
 export const LUNCH_CUTOFF_MIN = 9 * 60 + 30 // 09:30
 export const DINNER_CUTOFF_MIN = 18 * 60 // 18:00
-export const KHALA_DEFAULT_PAISA = 500 * 100 // cook bill per person
+export const KHALA_DEFAULT_PAISA = 4000 * 100 // total cook bill, split equally
 export const DUTY_DAYS = 3
 
 // Doc id = lowercase email for real members. Pending members (no email yet)

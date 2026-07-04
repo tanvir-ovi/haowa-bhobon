@@ -64,7 +64,7 @@ export interface ExpenseDoc {
   newspaperPaisa: number
   otherPaisa: number
   otherNote: string
-  khalaPerPersonPaisa: number
+  khalaTotalPaisa: number // one total cook bill, split equally
 }
 
 // A custom bazar item a member added — becomes part of the shared menu.
@@ -91,7 +91,7 @@ export interface MonthSnapshot {
   totalMeals: number
   totalBazarPaisa: number
   billsPaisa: number
-  khalaPerPersonPaisa: number
+  khalaTotalPaisa: number
   utilitiesPaisa: number
   ratePaisa: number
   rows: {

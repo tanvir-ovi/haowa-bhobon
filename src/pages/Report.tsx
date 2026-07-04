@@ -48,7 +48,7 @@ export default function Report() {
         totalMeals: snapshot.totalMeals,
         totalBazarPaisa: snapshot.totalBazarPaisa,
         billsPaisa: snapshot.billsPaisa,
-        khalaPerPersonPaisa: snapshot.khalaPerPersonPaisa,
+        khalaTotalPaisa: snapshot.khalaTotalPaisa,
         utilitiesPaisa: snapshot.utilitiesPaisa,
         ratePaisa: snapshot.ratePaisa,
         rows: snapshot.rows,
@@ -61,7 +61,7 @@ export default function Report() {
     const lines = [
       `${MESS_NAME} — Settlement · ${monthLabel(month)}`,
       `Bazar ${fmtPaisa(data.totalBazarPaisa)} · Meals ${data.totalMeals} · Rate ${fmtPaisa(data.ratePaisa)}/meal`,
-      `Utilities ${fmtPaisa(data.utilitiesPaisa)} (incl. cook ${fmtPaisa(data.khalaPerPersonPaisa)}/person)`,
+      `Utilities ${fmtPaisa(data.utilitiesPaisa)} (incl. cook ${fmtPaisa(data.khalaTotalPaisa)} total)`,
       '––––––––––––––––––',
       ...rows.map((r) => {
         const tag =

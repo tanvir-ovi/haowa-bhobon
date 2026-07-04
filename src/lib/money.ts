@@ -53,7 +53,7 @@ export interface Settlement {
   totalMeals: number
   totalBazarPaisa: number
   billsPaisa: number
-  khalaPerPersonPaisa: number
+  khalaTotalPaisa: number
   utilitiesPaisa: number
   ratePaisa: number // per meal (display value)
   rows: SettlementRow[]
@@ -81,8 +81,9 @@ export function computeSettlement(
     (expenses.electricityPaisa || 0) +
     (expenses.newspaperPaisa || 0) +
     (expenses.otherPaisa || 0)
-  const billShares = splitEqual(billsPaisa, activeMembers.length)
-  const khalaPerPersonPaisa = expenses.khalaPerPersonPaisa || 0
+  // Bills and the total cook bill are one shared pot, split equally.
+  const khalaTotalPaisa = expenses.khalaTotalPaisa || 0
+  const utilityShares = splitEqual(billsPaisa + khalaTotalPaisa, activeMembers.length)
 
   const paidByMember = new Map<string, number>()
   for (const e of entries) {
@@ -90,7 +91,7 @@ export function computeSettlement(
   }
 
   const rows: SettlementRow[] = activeMembers.map((m, i) => {
-    const utilityPaisa = billShares[i] + khalaPerPersonPaisa
+    const utilityPaisa = utilityShares[i]
     const duePaisa = mealCostParts[i] + utilityPaisa
     const bazarPaidPaisa = paidByMember.get(m.email) ?? 0
     return {
@@ -111,8 +112,8 @@ export function computeSettlement(
     totalMeals,
     totalBazarPaisa,
     billsPaisa,
-    khalaPerPersonPaisa,
-    utilitiesPaisa: billsPaisa + khalaPerPersonPaisa * activeMembers.length,
+    khalaTotalPaisa,
+    utilitiesPaisa: billsPaisa + khalaTotalPaisa,
     ratePaisa: totalMeals > 0 ? totalBazarPaisa / totalMeals : 0,
     rows,
   }

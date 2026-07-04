@@ -52,9 +52,8 @@ export default function Expenses() {
     form.electricityPaisa +
     form.newspaperPaisa +
     form.otherPaisa
-  const khalaTotalPaisa = form.khalaPerPersonPaisa * count
-  const grandPaisa = billsPaisa + khalaTotalPaisa
-  const perHeadPaisa = count > 0 ? billsPaisa / count + form.khalaPerPersonPaisa : 0
+  const grandPaisa = billsPaisa + form.khalaTotalPaisa
+  const perHeadPaisa = count > 0 ? grandPaisa / count : 0
 
   function patch(key: keyof ExpenseDoc, value: number | string) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -110,17 +109,17 @@ export default function Expenses() {
             ))}
             <div>
               <label className="label flex items-center gap-1.5">
-                <ChefHat size={16} /> Cook bill / person (Tk)
+                <ChefHat size={16} /> Cook bill — total (Tk)
               </label>
               <input
                 className="input"
                 type="number"
                 min={0}
                 step="any"
-                value={tkValue(form.khalaPerPersonPaisa)}
-                placeholder="500"
+                value={tkValue(form.khalaTotalPaisa)}
+                placeholder="4000"
                 disabled={!isManager}
-                onChange={(e) => patch('khalaPerPersonPaisa', toPaisa(Number(e.target.value)))}
+                onChange={(e) => patch('khalaTotalPaisa', toPaisa(Number(e.target.value)))}
               />
             </div>
             <div className="sm:col-span-2">
@@ -157,7 +156,7 @@ export default function Expenses() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={<Zap size={20} />} label="Bills total" value={fmtPaisa(billsPaisa)} sub="wifi + water + gas + more" accent="sun" />
-        <StatCard icon={<ChefHat size={20} />} label="Cook total" value={fmtPaisa(khalaTotalPaisa)} sub={`${fmtPaisa(form.khalaPerPersonPaisa)} × ${count}`} accent="teal" delay={0.05} />
+        <StatCard icon={<ChefHat size={20} />} label="Cook total" value={fmtPaisa(form.khalaTotalPaisa)} sub={`split ${count} ways`} accent="teal" delay={0.05} />
         <StatCard icon={<PackagePlus size={20} />} label="Grand total" value={fmtPaisa(grandPaisa)} sub="all shared costs" accent="brand" delay={0.1} />
         <StatCard icon={<Users size={20} />} label="Per member" value={fmtPaisa(perHeadPaisa)} sub="added to each balance" accent="ink" delay={0.15} />
       </div>
