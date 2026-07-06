@@ -451,6 +451,66 @@ export default function Dashboard() {
         )}
       </motion.div>
 
+      {/* Washroom & basin washing roster — visible to every member */}
+      <motion.div
+        className="card p-5"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <Sparkles size={18} className="text-mteal-500" />
+          <h2 className="font-extrabold">Washroom & basin washing</h2>
+        </div>
+        {cleaning.length === 0 ? (
+          <p className="text-sm text-ink/45 font-medium">No cleaning duty assigned yet.</p>
+        ) : (
+          <div className="space-y-4">
+            {[...new Set(cleaning.map((c) => c.round))]
+              .sort((a, b) => a - b)
+              .map((round) => (
+                <div key={round}>
+                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-ink/40 mb-1.5">
+                    Round {round}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {cleaning
+                      .filter((c) => c.round === round)
+                      .map((c) => {
+                        const m = members.find((x) => x.email === c.email)
+                        const isToday = c.date === today && !c.done
+                        const overdue = !c.done && c.date && c.date < today
+                        return (
+                          <div
+                            key={c.id}
+                            className={`flex items-center gap-2 rounded-2xl border px-3 py-1.5
+                              ${isToday ? 'bg-sun-300/30 border-sun-500/40 ring-2 ring-sun-500/15' : 'bg-ink/3 border-ink/8'}
+                              ${c.done ? 'opacity-65' : ''}`}
+                          >
+                            <Avatar name={m?.name ?? c.email} size="sm" />
+                            <div>
+                              <div className="font-bold text-xs leading-tight">{m?.nickname ?? c.email}</div>
+                              <div className="text-[10px] font-semibold text-ink/45">
+                                {c.date ? dayLabel(c.date) : 'earlier'}
+                              </div>
+                            </div>
+                            {c.done ? (
+                              <span className="chip bg-emerald-100 text-emerald-700 !py-0.5">✓ Done</span>
+                            ) : isToday ? (
+                              <span className="chip bg-sun-500 text-white !py-0.5">Today</span>
+                            ) : overdue ? (
+                              <span className="chip bg-rose-100 text-rose-600 !py-0.5">Overdue</span>
+                            ) : null}
+                          </div>
+                        )
+                      })}
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+      </motion.div>
+
       {/* Month stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={<UtensilsCrossed size={20} />} label="My meals" value={String(myMeals)} sub={`mess total ${totalMeals}`} accent="brand" delay={0.05} />
