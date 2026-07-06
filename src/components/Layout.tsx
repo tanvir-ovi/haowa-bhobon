@@ -134,21 +134,26 @@ export default function Layout() {
         </motion.div>
       </main>
 
-      {/* Mobile bottom nav */}
+      {/* Mobile bottom nav — icons only; the active item grows a label */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 px-3 pb-3 no-print">
-        <div className="card flex justify-around px-1 py-1.5 rounded-3xl">
+        <div className="card flex justify-around items-center px-1.5 py-2 rounded-3xl">
           {nav.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
               end={to === '/'}
+              title={label}
               className={({ isActive }) =>
-                `flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-2xl transition
-                ${isActive ? 'text-brand-600 bg-brand-50' : 'text-ink/45'}`
+                `flex items-center gap-1.5 rounded-2xl transition-all duration-200
+                ${isActive ? 'text-white bg-gradient-to-br from-brand-500 to-brand-700 shadow-md shadow-brand-500/30 px-3 py-2' : 'text-ink/45 px-2 py-2'}`
               }
             >
-              <Icon size={20} />
-              <span className="text-[9px] font-bold">{label}</span>
+              {({ isActive }) => (
+                <>
+                  <Icon size={20} />
+                  {isActive && <span className="text-[10px] font-extrabold whitespace-nowrap">{label}</span>}
+                </>
+              )}
             </NavLink>
           ))}
         </div>

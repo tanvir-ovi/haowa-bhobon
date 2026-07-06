@@ -23,11 +23,12 @@ import {
   Moon,
   CalendarDays,
   ChefHat,
+  Sparkles,
   Trash2,
 } from 'lucide-react'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import { useMeals, useBazar, useDuty, useAbsences, useTick } from '../hooks/useData'
+import { useMeals, useBazar, useDuty, useAbsences, useCleaning, useTick } from '../hooks/useData'
 import {
   dhakaNow,
   monthOf,
@@ -164,6 +165,7 @@ export default function Dashboard() {
   const { entries: bazar } = useBazar(month)
   const { duty } = useDuty(month)
   const { absences } = useAbsences()
+  const { cleaning } = useCleaning()
   const email = (member?.email ?? user?.email ?? '').toLowerCase()
 
   // Away modal state
@@ -229,6 +231,10 @@ export default function Dashboard() {
   const dutyMember = (em?: string) => members.find((m) => m.email === em)
 
   const activeAbsences = absences.filter((a) => !a.endDate || a.endDate >= today)
+
+  const nextCleaning = cleaning
+    .filter((c) => !c.done && c.date >= today)
+    .sort((a, b) => a.date.localeCompare(b.date))[0]
 
   async function saveAway() {
     if (!awayLunch && !awayDinner) return
@@ -346,6 +352,23 @@ export default function Dashboard() {
               <div className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Up next</div>
               <div className="font-bold text-sm">
                 {dutyMember(dutyNext.email)?.nickname ?? dutyNext.email} · {dayLabel(dutyNext.startDate)}
+              </div>
+            </div>
+          )}
+          {nextCleaning && (
+            <div className="w-full sm:w-auto flex items-center gap-2 rounded-2xl bg-mteal-500/8 border border-mteal-500/20 px-3 py-2">
+              <Sparkles size={15} className="text-mteal-500 shrink-0" />
+              <div className="text-xs font-bold text-ink/60">
+                Washroom cleaning:{' '}
+                <span className="text-ink">
+                  {dutyMember(nextCleaning.email)?.nickname ?? nextCleaning.email}
+                </span>{' '}
+                ·{' '}
+                {nextCleaning.date === today ? (
+                  <span className="text-brand-600">today</span>
+                ) : (
+                  dayLabel(nextCleaning.date)
+                )}
               </div>
             </div>
           )}

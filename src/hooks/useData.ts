@@ -4,6 +4,7 @@ import { db } from '../firebase'
 import type {
   AbsenceDoc,
   BazarEntry,
+  CleaningDoc,
   DutyDoc,
   ExpenseDoc,
   MealDoc,
@@ -147,6 +148,26 @@ export function useMenu(): { customMenu: MenuItemDoc[]; loading: boolean } {
     )
   }, [])
   return { customMenu, loading }
+}
+
+// Washroom & basin cleaning roster — small collection, subscribe to all.
+export function useCleaning(): { cleaning: CleaningDoc[]; loading: boolean } {
+  const [cleaning, setCleaning] = useState<CleaningDoc[]>([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    return onSnapshot(
+      collection(db, 'cleaning'),
+      (snap) => {
+        const list: CleaningDoc[] = []
+        snap.forEach((d) => list.push({ ...(d.data() as CleaningDoc), id: d.id }))
+        list.sort((a, b) => a.round - b.round || a.date.localeCompare(b.date))
+        setCleaning(list)
+        setLoading(false)
+      },
+      () => setLoading(false),
+    )
+  }, [])
+  return { cleaning, loading }
 }
 
 // Away ranges are few and can span months, so subscribe to all of them.

@@ -83,6 +83,16 @@ export interface DutyDoc {
   endDate: string
 }
 
+// Washroom & basin cleaning roster (collection: cleaning).
+export interface CleaningDoc {
+  id?: string
+  email: string
+  round: number
+  date: string // scheduled date, '' if unknown (old rounds)
+  done: boolean
+  doneDate: string // '' if not done or date unknown
+}
+
 // Immutable month-end snapshot written by Finalize (collection: months).
 export interface MonthSnapshot {
   month: string

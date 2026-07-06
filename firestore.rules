@@ -96,6 +96,12 @@ service cloud.firestore {
       allow update: if false;
     }
 
+    // Washroom & basin cleaning roster. Managed by manager/admin.
+    match /cleaning/{id} {
+      allow read: if isMember();
+      allow write: if isManager();
+    }
+
     // Shared bazar menu — custom items any member adds for everyone.
     match /menu/{id} {
       allow read: if isMember();
