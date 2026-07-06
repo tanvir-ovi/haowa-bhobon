@@ -62,6 +62,7 @@ export interface ExpenseDoc {
   gasPaisa: number
   electricityPaisa: number
   newspaperPaisa: number
+  dustbinPaisa: number // waste collection service
   otherPaisa: number
   otherNote: string
   khalaTotalPaisa: number // one total cook bill, split equally

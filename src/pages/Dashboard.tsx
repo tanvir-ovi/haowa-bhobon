@@ -22,6 +22,7 @@ import {
   Sun,
   Moon,
   CalendarDays,
+  CalendarRange,
   ChefHat,
   Sparkles,
   Trash2,
@@ -39,6 +40,7 @@ import {
   mealKey,
   countMeals,
   resolveMeal,
+  nickFromId,
   dayLabel,
   monthLabel,
   type DhakaNow,
@@ -49,9 +51,18 @@ import MealSwitch from '../components/MealSwitch'
 import StatCard from '../components/StatCard'
 import Avatar from '../components/Avatar'
 import Modal from '../components/Modal'
-import type { AbsenceDoc, MealDoc } from '../types'
+import SegmentTabs from '../components/SegmentTabs'
+import type { MealDoc } from '../types'
 
 type MealPatch = Partial<Pick<MealDoc, 'lunch' | 'dinner' | 'guestsLunch' | 'guestsDinner'>>
+type Tab = 'today' | 'duties' | 'away' | 'stats'
+
+const TABS = [
+  { id: 'today' as Tab, label: 'Today', icon: Sun },
+  { id: 'duties' as Tab, label: 'Duties', icon: CalendarRange },
+  { id: 'away' as Tab, label: 'Away', icon: Moon },
+  { id: 'stats' as Tab, label: 'Stats', icon: TrendingUp },
+]
 
 // Top-level component (not nested in Dashboard) so re-renders from the
 // countdown tick never remount it — nesting it caused visible flicker.
@@ -93,14 +104,24 @@ function DayCard({
         <span className="text-xs font-bold text-ink/60">{label}</span>
         <div className="flex items-center gap-2">
           <button
+            type="button"
             className="btn-ghost w-7 h-7 rounded-xl"
             disabled={locked || value === 0}
             onClick={() => onChange(Math.max(0, value - 1))}
+            title={`Remove ${label} guest`}
+            aria-label={`Remove ${label} guest`}
           >
             <Minus size={13} />
           </button>
           <span className="font-extrabold w-4 text-center tabular-nums text-sm">{value}</span>
-          <button className="btn-ghost w-7 h-7 rounded-xl" disabled={locked} onClick={() => onChange(value + 1)}>
+          <button
+            type="button"
+            className="btn-ghost w-7 h-7 rounded-xl"
+            disabled={locked}
+            onClick={() => onChange(value + 1)}
+            title={`Add ${label} guest`}
+            aria-label={`Add ${label} guest`}
+          >
             <Plus size={13} />
           </button>
         </div>
@@ -155,7 +176,7 @@ function DayCard({
 
 export default function Dashboard() {
   const { member, user, members, activeMembers, isManager } = useAuth()
-  useTick(30000) // refresh countdowns twice a minute; the header clock ticks separately
+  useTick(30000)
   const now = dhakaNow()
   const today = now.date
   const tomorrow = addDays(today, 1)
@@ -167,6 +188,7 @@ export default function Dashboard() {
   const { absences } = useAbsences()
   const { cleaning } = useCleaning()
   const email = (member?.email ?? user?.email ?? '').toLowerCase()
+  const [tab, setTab] = useState<Tab>('today')
 
   // Away modal state
   const [awayOpen, setAwayOpen] = useState(false)
@@ -179,6 +201,8 @@ export default function Dashboard() {
 
   const mapFor = (date: string) => (monthOf(date) === month ? meals : mealsNext)
   const stateFor = (date: string) => resolveMeal(mapFor(date), absences, email, date)
+  const nickOf = (em: string) => members.find((m) => m.email === em)?.nickname ?? nickFromId(em)
+  const nameOf = (em: string) => members.find((m) => m.email === em)?.name ?? nickFromId(em)
 
   function patchMeal(date: string, patch: MealPatch) {
     const cur = stateFor(date)
@@ -225,13 +249,10 @@ export default function Dashboard() {
     .reduce((s, e) => s + (e.totalPaisa || 0), 0)
   const ratePaisa = totalMeals > 0 ? totalBazarPaisa / totalMeals : 0
 
-  // Bazar duty
+  // Duties
   const dutyToday = duty.find((d) => d.startDate <= today && today <= d.endDate)
   const dutyNext = duty.find((d) => d.startDate > today)
-  const dutyMember = (em?: string) => members.find((m) => m.email === em)
-
   const activeAbsences = absences.filter((a) => !a.endDate || a.endDate >= today)
-
   const nextCleaning = cleaning
     .filter((c) => !c.done && c.date >= today)
     .sort((a, b) => a.date.localeCompare(b.date))[0]
@@ -250,7 +271,6 @@ export default function Dashboard() {
         endDate: awayEnd,
         createdAt: serverTimestamp(),
       })
-      // Clear explicit day toggles inside the range so the leave takes effect.
       const snap = await getDocs(query(collection(db, 'meals'), where('email', '==', target)))
       const batch = writeBatch(db)
       const effectiveFrom = isManager ? awayStart : awayStart > tomorrow ? awayStart : tomorrow
@@ -269,7 +289,7 @@ export default function Dashboard() {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
         <h1 className="text-2xl lg:text-3xl font-extrabold">
           {greeting}, {member?.nickname ?? 'friend'} 👋
@@ -279,245 +299,268 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* Cook counts — tell the cook how many plates */}
-      <motion.div
-        className="card p-5 bg-gradient-to-r from-brand-50 via-white to-sun-300/25"
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-white flex items-center justify-center shadow-lg shadow-brand-500/30">
-            <ChefHat size={22} />
-          </div>
-          <div>
-            <div className="font-extrabold">Plates to cook</div>
-            <div className="text-xs font-semibold text-ink/45">members ON + guests</div>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          {[
-            { label: 'Today', c: cookToday },
-            { label: 'Tomorrow', c: cookTomorrow },
-          ].map(({ label, c }) => (
-            <div key={label} className="rounded-2xl bg-white/80 border border-ink/6 p-3">
-              <div className="text-[10px] font-extrabold uppercase tracking-wider text-ink/40 mb-1.5">
-                {label}
+      <SegmentTabs tabs={TABS} value={tab} onChange={setTab} layoutId="dash-tab" />
+
+      {/* ---- TODAY ---- */}
+      {tab === 'today' && (
+        <motion.div className="space-y-4" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+          {/* Cook counts */}
+          <div className="card p-5 bg-gradient-to-r from-brand-50 via-white to-sun-300/25">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-white flex items-center justify-center shadow-lg shadow-brand-500/30">
+                <ChefHat size={22} />
               </div>
-              <div className="flex items-center gap-4">
-                <div>
-                  <span className="text-2xl font-extrabold text-brand-600 tabular-nums">{c.lunch}</span>
-                  <span className="text-xs font-bold text-ink/50 ml-1">🍛 lunch</span>
-                </div>
-                <div>
-                  <span className="text-2xl font-extrabold text-mteal-600 tabular-nums">{c.dinner}</span>
-                  <span className="text-xs font-bold text-ink/50 ml-1">🍲 dinner</span>
-                </div>
+              <div>
+                <div className="font-extrabold">Plates to cook</div>
+                <div className="text-xs font-semibold text-ink/45">members ON + guests</div>
               </div>
             </div>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* Bazar duty banner */}
-      <motion.div
-        className="card p-5 bg-gradient-to-r from-sun-300/40 via-white to-mteal-300/25"
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
-      >
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sun-400 to-sun-600 text-white flex items-center justify-center shadow-lg shadow-sun-500/30">
-            <Sun size={22} />
-          </div>
-          <div className="flex-1 min-w-48">
-            <div className="text-xs font-bold uppercase tracking-wider text-ink/45">
-              Bazar duty today
-            </div>
-            {dutyToday ? (
-              <div className="flex items-center gap-2 mt-1">
-                <Avatar name={dutyMember(dutyToday.email)?.name ?? dutyToday.email} size="sm" />
-                <span className="font-extrabold">
-                  {dutyMember(dutyToday.email)?.nickname ?? dutyToday.email}
-                </span>
-                <span className="chip bg-sun-300/50 text-amber-800">
-                  {dayLabel(dutyToday.startDate)} → {dayLabel(dutyToday.endDate)}
-                </span>
-              </div>
-            ) : (
-              <div className="font-bold text-ink/50 mt-1">No one assigned — ask the manager</div>
-            )}
-          </div>
-          {dutyNext && (
-            <div className="text-right">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Up next</div>
-              <div className="font-bold text-sm">
-                {dutyMember(dutyNext.email)?.nickname ?? dutyNext.email} · {dayLabel(dutyNext.startDate)}
-              </div>
-            </div>
-          )}
-          {nextCleaning && (
-            <div className="w-full sm:w-auto flex items-center gap-2 rounded-2xl bg-mteal-500/8 border border-mteal-500/20 px-3 py-2">
-              <Sparkles size={15} className="text-mteal-500 shrink-0" />
-              <div className="text-xs font-bold text-ink/60">
-                Washroom cleaning:{' '}
-                <span className="text-ink">
-                  {dutyMember(nextCleaning.email)?.nickname ?? nextCleaning.email}
-                </span>{' '}
-                ·{' '}
-                {nextCleaning.date === today ? (
-                  <span className="text-brand-600">today</span>
-                ) : (
-                  dayLabel(nextCleaning.date)
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </motion.div>
-
-      {/* Today / tomorrow toggles */}
-      <div className="grid md:grid-cols-2 gap-4">
-        <DayCard title="Today" date={today} now={now} st={stateFor(today)} onPatch={(p) => patchMeal(today, p)} />
-        <DayCard
-          title="Tomorrow"
-          date={tomorrow}
-          now={now}
-          st={stateFor(tomorrow)}
-          onPatch={(p) => patchMeal(tomorrow, p)}
-        />
-      </div>
-
-      {/* Away mode */}
-      <motion.div className="card p-5" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Moon size={18} className="text-mteal-500" />
-            <h2 className="font-extrabold">Away mode</h2>
-            <span className="text-xs font-semibold text-ink/40 hidden sm:inline">
-              — turn meals off for a long period, no daily toggling
-            </span>
-          </div>
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            className="btn-teal px-4 py-2 text-sm"
-            onClick={() => {
-              setAwayMember(email)
-              setAwayLunch(true)
-              setAwayDinner(true)
-              setAwayStart(tomorrow)
-              setAwayEnd('')
-              setAwayOpen(true)
-            }}
-          >
-            <Moon size={14} /> Go away
-          </motion.button>
-        </div>
-        {activeAbsences.length === 0 ? (
-          <p className="text-sm text-ink/45 font-medium">
-            Nobody is away. Everyone's meals turn ON automatically every day.
-          </p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {activeAbsences.map((a) => {
-              const m = members.find((x) => x.email === a.email)
-              const canCancel = isManager || a.email === email
-              return (
-                <div key={a.id} className="flex items-center gap-2 rounded-2xl bg-ink/3 border border-ink/8 px-3 py-2">
-                  <Avatar name={m?.name ?? a.email} size="sm" />
-                  <div>
-                    <div className="font-bold text-sm leading-tight">
-                      {m?.nickname ?? a.email}
-                      <span className="chip bg-rose-100 text-rose-600 ml-2 !py-0.5">
-                        {a.lunch && a.dinner ? 'both off' : a.lunch ? 'lunch off' : 'dinner off'}
-                      </span>
-                    </div>
-                    <div className="text-[11px] font-semibold text-ink/45">
-                      {dayLabel(a.startDate)} → {a.endDate ? dayLabel(a.endDate) : 'until back'}
-                    </div>
-                  </div>
-                  {canCancel && (
-                    <button
-                      className="btn-ghost p-1.5 rounded-lg text-rose-500"
-                      onClick={() => a.id && deleteDoc(doc(db, 'absences', a.id))}
-                      title="Cancel leave (meals auto ON again)"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </motion.div>
-
-      {/* Washroom & basin washing roster — visible to every member */}
-      <motion.div
-        className="card p-5"
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-      >
-        <div className="flex items-center gap-2 mb-3">
-          <Sparkles size={18} className="text-mteal-500" />
-          <h2 className="font-extrabold">Washroom & basin washing</h2>
-        </div>
-        {cleaning.length === 0 ? (
-          <p className="text-sm text-ink/45 font-medium">No cleaning duty assigned yet.</p>
-        ) : (
-          <div className="space-y-4">
-            {[...new Set(cleaning.map((c) => c.round))]
-              .sort((a, b) => a - b)
-              .map((round) => (
-                <div key={round}>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Today', c: cookToday },
+                { label: 'Tomorrow', c: cookTomorrow },
+              ].map(({ label, c }) => (
+                <div key={label} className="rounded-2xl bg-white/80 border border-ink/6 p-3">
                   <div className="text-[10px] font-extrabold uppercase tracking-wider text-ink/40 mb-1.5">
-                    Round {round}
+                    {label}
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {cleaning
-                      .filter((c) => c.round === round)
-                      .map((c) => {
-                        const m = members.find((x) => x.email === c.email)
-                        const isToday = c.date === today && !c.done
-                        const overdue = !c.done && c.date && c.date < today
-                        return (
-                          <div
-                            key={c.id}
-                            className={`flex items-center gap-2 rounded-2xl border px-3 py-1.5
-                              ${isToday ? 'bg-sun-300/30 border-sun-500/40 ring-2 ring-sun-500/15' : 'bg-ink/3 border-ink/8'}
-                              ${c.done ? 'opacity-65' : ''}`}
-                          >
-                            <Avatar name={m?.name ?? c.email} size="sm" />
-                            <div>
-                              <div className="font-bold text-xs leading-tight">{m?.nickname ?? c.email}</div>
-                              <div className="text-[10px] font-semibold text-ink/45">
-                                {c.date ? dayLabel(c.date) : 'earlier'}
-                              </div>
-                            </div>
-                            {c.done ? (
-                              <span className="chip bg-emerald-100 text-emerald-700 !py-0.5">✓ Done</span>
-                            ) : isToday ? (
-                              <span className="chip bg-sun-500 text-white !py-0.5">Today</span>
-                            ) : overdue ? (
-                              <span className="chip bg-rose-100 text-rose-600 !py-0.5">Overdue</span>
-                            ) : null}
-                          </div>
-                        )
-                      })}
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <span className="text-2xl font-extrabold text-brand-600 tabular-nums">{c.lunch}</span>
+                      <span className="text-xs font-bold text-ink/50 ml-1">🍛 lunch</span>
+                    </div>
+                    <div>
+                      <span className="text-2xl font-extrabold text-mteal-600 tabular-nums">{c.dinner}</span>
+                      <span className="text-xs font-bold text-ink/50 ml-1">🍲 dinner</span>
+                    </div>
                   </div>
                 </div>
               ))}
+            </div>
           </div>
-        )}
-      </motion.div>
 
-      {/* Month stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={<UtensilsCrossed size={20} />} label="My meals" value={String(myMeals)} sub={`mess total ${totalMeals}`} accent="brand" delay={0.05} />
-        <StatCard icon={<Wallet size={20} />} label="My bazar" value={fmtPaisa(myBazarPaisa)} sub="spent from my pocket" accent="teal" delay={0.1} />
-        <StatCard icon={<ShoppingBasket size={20} />} label="Total bazar" value={fmtPaisa(totalBazarPaisa)} sub={`${bazar.length} entries`} accent="sun" delay={0.15} />
-        <StatCard icon={<TrendingUp size={20} />} label="Live meal rate" value={fmtPaisa(ratePaisa)} sub="so far this month" accent="ink" delay={0.2} />
-      </div>
+          {/* Duty strip */}
+          <div className="card p-4 flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <Sun size={16} className="text-sun-500 shrink-0" />
+              <span className="text-xs font-bold text-ink/60">
+                Bazar duty:{' '}
+                {dutyToday ? (
+                  <span className="text-ink">{nickOf(dutyToday.email)}</span>
+                ) : (
+                  <span className="text-ink/40">nobody today</span>
+                )}
+                {dutyNext && (
+                  <span className="text-ink/45"> · next {nickOf(dutyNext.email)} ({dayLabel(dutyNext.startDate)})</span>
+                )}
+              </span>
+            </div>
+            {nextCleaning && (
+              <div className="flex items-center gap-2 min-w-0">
+                <Sparkles size={15} className="text-mteal-500 shrink-0" />
+                <span className="text-xs font-bold text-ink/60">
+                  Washroom: <span className="text-ink">{nickOf(nextCleaning.email)}</span> ·{' '}
+                  {nextCleaning.date === today ? (
+                    <span className="text-brand-600">today</span>
+                  ) : (
+                    dayLabel(nextCleaning.date)
+                  )}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Today / tomorrow toggles */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <DayCard title="Today" date={today} now={now} st={stateFor(today)} onPatch={(p) => patchMeal(today, p)} />
+            <DayCard
+              title="Tomorrow"
+              date={tomorrow}
+              now={now}
+              st={stateFor(tomorrow)}
+              onPatch={(p) => patchMeal(tomorrow, p)}
+            />
+          </div>
+        </motion.div>
+      )}
+
+      {/* ---- DUTIES ---- */}
+      {tab === 'duties' && (
+        <motion.div className="space-y-4" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+          {/* Bazar duty roster */}
+          <div className="card p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <ShoppingBasket size={18} className="text-sun-500" />
+              <h2 className="font-extrabold">Bazar duty — {monthLabel(month)}</h2>
+            </div>
+            {duty.length === 0 ? (
+              <p className="text-sm text-ink/45 font-medium">No duty assigned this month yet.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {duty.map((d) => {
+                  const current = d.startDate <= today && today <= d.endDate
+                  return (
+                    <div
+                      key={d.id}
+                      className={`flex items-center gap-2 rounded-2xl px-3 py-2 border
+                        ${current ? 'bg-sun-300/30 border-sun-500/40 ring-2 ring-sun-500/20' : 'bg-ink/3 border-ink/8'}`}
+                    >
+                      <Avatar name={nameOf(d.email)} size="sm" />
+                      <div>
+                        <div className="font-bold text-sm leading-tight">
+                          {nickOf(d.email)}
+                          {current && <span className="chip bg-sun-500 text-white ml-2 !py-0.5">now</span>}
+                        </div>
+                        <div className="text-[11px] font-semibold text-ink/45">
+                          {dayLabel(d.startDate)} → {dayLabel(d.endDate)}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            <p className="text-[11px] text-ink/40 font-semibold mt-3">
+              Manager assigns and edits duty in the Bazar tab.
+            </p>
+          </div>
+
+          {/* Cleaning roster */}
+          <div className="card p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles size={18} className="text-mteal-500" />
+              <h2 className="font-extrabold">Washroom & basin washing</h2>
+            </div>
+            {cleaning.length === 0 ? (
+              <p className="text-sm text-ink/45 font-medium">No cleaning duty assigned yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {[...new Set(cleaning.map((c) => c.round))]
+                  .sort((a, b) => a - b)
+                  .map((round) => (
+                    <div key={round}>
+                      <div className="text-[10px] font-extrabold uppercase tracking-wider text-ink/40 mb-1.5">
+                        Round {round}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {cleaning
+                          .filter((c) => c.round === round)
+                          .map((c) => {
+                            const isToday = c.date === today && !c.done
+                            const overdue = !c.done && c.date && c.date < today
+                            return (
+                              <div
+                                key={c.id}
+                                className={`flex items-center gap-2 rounded-2xl border px-3 py-1.5
+                                  ${isToday ? 'bg-sun-300/30 border-sun-500/40 ring-2 ring-sun-500/15' : 'bg-ink/3 border-ink/8'}
+                                  ${c.done ? 'opacity-65' : ''}`}
+                              >
+                                <Avatar name={nameOf(c.email)} size="sm" />
+                                <div>
+                                  <div className="font-bold text-xs leading-tight">{nickOf(c.email)}</div>
+                                  <div className="text-[10px] font-semibold text-ink/45">
+                                    {c.date ? dayLabel(c.date) : 'earlier'}
+                                  </div>
+                                </div>
+                                {c.done ? (
+                                  <span className="chip bg-emerald-100 text-emerald-700 !py-0.5">✓ Done</span>
+                                ) : isToday ? (
+                                  <span className="chip bg-sun-500 text-white !py-0.5">Today</span>
+                                ) : overdue ? (
+                                  <span className="chip bg-rose-100 text-rose-600 !py-0.5">Overdue</span>
+                                ) : null}
+                              </div>
+                            )
+                          })}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
+
+      {/* ---- AWAY ---- */}
+      {tab === 'away' && (
+        <motion.div className="card p-5" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Moon size={18} className="text-mteal-500" />
+              <h2 className="font-extrabold">Away mode</h2>
+            </div>
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              className="btn-teal px-4 py-2 text-sm"
+              onClick={() => {
+                setAwayMember(email)
+                setAwayLunch(true)
+                setAwayDinner(true)
+                setAwayStart(tomorrow)
+                setAwayEnd('')
+                setAwayOpen(true)
+              }}
+            >
+              <Moon size={14} /> Go away
+            </motion.button>
+          </div>
+          <p className="text-xs font-semibold text-ink/45 mb-3">
+            Turn meals off for a long period with one tap — no daily toggling. Cancel any time and
+            meals turn back ON automatically.
+          </p>
+          {activeAbsences.length === 0 ? (
+            <p className="text-sm text-ink/45 font-medium">
+              Nobody is away. Everyone's meals turn ON automatically every day.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {activeAbsences.map((a) => {
+                const canCancel = isManager || a.email === email
+                return (
+                  <div key={a.id} className="flex items-center gap-2 rounded-2xl bg-ink/3 border border-ink/8 px-3 py-2">
+                    <Avatar name={nameOf(a.email)} size="sm" />
+                    <div>
+                      <div className="font-bold text-sm leading-tight">
+                        {nickOf(a.email)}
+                        <span className="chip bg-rose-100 text-rose-600 ml-2 !py-0.5">
+                          {a.lunch && a.dinner ? 'both off' : a.lunch ? 'lunch off' : 'dinner off'}
+                        </span>
+                      </div>
+                      <div className="text-[11px] font-semibold text-ink/45">
+                        {dayLabel(a.startDate)} → {a.endDate ? dayLabel(a.endDate) : 'until back'}
+                      </div>
+                    </div>
+                    {canCancel && (
+                      <button
+                        type="button"
+                        className="btn-ghost p-1.5 rounded-lg text-rose-500"
+                        onClick={() => a.id && deleteDoc(doc(db, 'absences', a.id))}
+                        title="Cancel leave (meals auto ON again)"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {/* ---- STATS ---- */}
+      {tab === 'stats' && (
+        <motion.div
+          className="grid grid-cols-2 lg:grid-cols-4 gap-4"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <StatCard icon={<UtensilsCrossed size={20} />} label="My meals" value={String(myMeals)} sub={`mess total ${totalMeals}`} accent="brand" delay={0.05} />
+          <StatCard icon={<Wallet size={20} />} label="My bazar" value={fmtPaisa(myBazarPaisa)} sub="spent from my pocket" accent="teal" delay={0.1} />
+          <StatCard icon={<ShoppingBasket size={20} />} label="Total bazar" value={fmtPaisa(totalBazarPaisa)} sub={`${bazar.length} entries`} accent="sun" delay={0.15} />
+          <StatCard icon={<TrendingUp size={20} />} label="Live meal rate" value={fmtPaisa(ratePaisa)} sub="so far this month" accent="ink" delay={0.2} />
+        </motion.div>
+      )}
 
       {/* Away modal */}
       <Modal open={awayOpen} onClose={() => setAwayOpen(false)} title="Away mode — long meal off">
@@ -525,7 +568,12 @@ export default function Dashboard() {
           {isManager && (
             <div>
               <label className="label">Member</label>
-              <select className="input" value={awayMember} onChange={(e) => setAwayMember(e.target.value)}>
+              <select
+                className="input"
+                title="Member going away"
+                value={awayMember}
+                onChange={(e) => setAwayMember(e.target.value)}
+              >
                 {activeMembers.map((m) => (
                   <option key={m.email} value={m.email}>
                     {m.nickname}
@@ -558,6 +606,7 @@ export default function Dashboard() {
               <input
                 className="input"
                 type="date"
+                title="Away from date"
                 value={awayStart}
                 min={isManager ? undefined : tomorrow}
                 onChange={(e) => setAwayStart(e.target.value)}
@@ -565,7 +614,14 @@ export default function Dashboard() {
             </div>
             <div>
               <label className="label">Until (empty = until back)</label>
-              <input className="input" type="date" value={awayEnd} min={awayStart} onChange={(e) => setAwayEnd(e.target.value)} />
+              <input
+                className="input"
+                type="date"
+                title="Away until date"
+                value={awayEnd}
+                min={awayStart}
+                onChange={(e) => setAwayEnd(e.target.value)}
+              />
             </div>
           </div>
           <p className="text-xs text-ink/45 font-medium">

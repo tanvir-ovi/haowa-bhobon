@@ -10,6 +10,7 @@ import {
   ChefHat,
   PackagePlus,
   Save,
+  Trash2,
   Users,
 } from 'lucide-react'
 import { db } from '../firebase'
@@ -30,6 +31,7 @@ const FIELDS: { key: PaisaField; label: string; icon: React.ReactNode }[] = [
   { key: 'gasPaisa', label: 'Gas', icon: <Flame size={16} /> },
   { key: 'electricityPaisa', label: 'Electricity', icon: <Zap size={16} /> },
   { key: 'newspaperPaisa', label: 'Newspaper', icon: <Newspaper size={16} /> },
+  { key: 'dustbinPaisa', label: 'Dustbin', icon: <Trash2 size={16} /> },
   { key: 'otherPaisa', label: 'Other', icon: <PackagePlus size={16} /> },
 ]
 
@@ -51,6 +53,7 @@ export default function Expenses() {
     form.gasPaisa +
     form.electricityPaisa +
     form.newspaperPaisa +
+    form.dustbinPaisa +
     form.otherPaisa
   const grandPaisa = billsPaisa + form.khalaTotalPaisa
   const perHeadPaisa = count > 0 ? grandPaisa / count : 0

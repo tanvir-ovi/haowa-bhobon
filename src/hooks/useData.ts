@@ -54,14 +54,16 @@ export function useBazar(month: string): { entries: BazarEntry[]; loading: boole
   return { entries, loading }
 }
 
+// Fixed monthly bills prefill each new month; the manager can adjust.
 export function emptyExpenses(month: string): ExpenseDoc {
   return {
     month,
-    wifiPaisa: 0,
-    waterPaisa: 0,
-    gasPaisa: 0,
+    wifiPaisa: 800 * 100,
+    waterPaisa: 500 * 100,
+    gasPaisa: 1000 * 100,
     electricityPaisa: 0,
     newspaperPaisa: 0,
+    dustbinPaisa: 120 * 100,
     otherPaisa: 0,
     otherNote: '',
     khalaTotalPaisa: KHALA_DEFAULT_PAISA,

@@ -80,6 +80,7 @@ export function computeSettlement(
     (expenses.gasPaisa || 0) +
     (expenses.electricityPaisa || 0) +
     (expenses.newspaperPaisa || 0) +
+    (expenses.dustbinPaisa || 0) +
     (expenses.otherPaisa || 0)
   // Bills and the total cook bill are one shared pot, split equally.
   const khalaTotalPaisa = expenses.khalaTotalPaisa || 0

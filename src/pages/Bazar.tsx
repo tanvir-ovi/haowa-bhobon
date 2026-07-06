@@ -8,7 +8,7 @@ import {
   serverTimestamp,
   updateDoc,
 } from 'firebase/firestore'
-import { CalendarRange, Pencil, Plus, Search, ShoppingBasket, Trash2 } from 'lucide-react'
+import { CalendarRange, Pencil, Plus, Receipt, Search, ShoppingBasket, Trash2 } from 'lucide-react'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { useBazar, useDuty, useMenu } from '../hooks/useData'
@@ -16,10 +16,18 @@ import MonthPicker from '../components/MonthPicker'
 import Modal from '../components/Modal'
 import Avatar from '../components/Avatar'
 import Skeleton from '../components/Skeleton'
+import SegmentTabs from '../components/SegmentTabs'
 import { DUTY_DAYS, MENU_ITEMS, UNITS } from '../lib/constants'
-import { addDays, dayLabel, dhakaNow, monthOf } from '../lib/utils'
+import { addDays, dayLabel, dhakaNow, monthOf, nickFromId } from '../lib/utils'
 import { fmtPaisa, toPaisa } from '../lib/money'
 import type { BazarEntry, BazarItem } from '../types'
+
+type BazarTab = 'entries' | 'duty'
+
+const BAZAR_TABS = [
+  { id: 'entries' as BazarTab, label: 'Entries', icon: Receipt },
+  { id: 'duty' as BazarTab, label: 'Duty Roster', icon: CalendarRange },
+]
 
 interface ItemRow {
   key: number
@@ -38,6 +46,7 @@ export default function Bazar() {
   const { duty } = useDuty(month)
   const { customMenu } = useMenu()
   const myEmail = (member?.email ?? user?.email ?? '').toLowerCase()
+  const [tab, setTab] = useState<BazarTab>('entries')
 
   // ---- entry modal state ----
   const [entryOpen, setEntryOpen] = useState(false)
@@ -59,8 +68,8 @@ export default function Bazar() {
 
   const totalPaisa = items.reduce((s, i) => s + toPaisa(Number(i.priceTk) || 0), 0)
 
-  const nickOf = (em: string) => members.find((m) => m.email === em)?.nickname ?? em
-  const nameOf = (em: string) => members.find((m) => m.email === em)?.name ?? em
+  const nickOf = (em: string) => members.find((m) => m.email === em)?.nickname ?? nickFromId(em)
+  const nameOf = (em: string) => members.find((m) => m.email === em)?.name ?? nickFromId(em)
 
   // Built-in menu + everyone's custom items, deduplicated by name.
   const fullMenu = useMemo(() => {
@@ -213,7 +222,10 @@ export default function Bazar() {
         </div>
       </div>
 
+      <SegmentTabs tabs={BAZAR_TABS} value={tab} onChange={setTab} layoutId="bazar-tab" />
+
       {/* Duty schedule */}
+      {tab === 'duty' && (
       <motion.div className="card p-5" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-extrabold flex items-center gap-2">
@@ -271,8 +283,10 @@ export default function Bazar() {
           </div>
         )}
       </motion.div>
+      )}
 
       {/* Member totals */}
+      {tab === 'entries' && (
       <motion.div
         className="card p-5"
         initial={{ opacity: 0, y: 16 }}
@@ -299,9 +313,10 @@ export default function Bazar() {
           </div>
         )}
       </motion.div>
+      )}
 
       {/* Entries */}
-      {loading ? (
+      {tab === 'entries' && (loading ? (
         <div className="space-y-3">
           <Skeleton className="h-28" />
           <Skeleton className="h-28" />
@@ -359,7 +374,7 @@ export default function Bazar() {
             </div>
           )}
         </div>
-      )}
+      ))}
 
       {/* Add/edit entry modal */}
       <Modal
@@ -372,12 +387,19 @@ export default function Bazar() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Date</label>
-              <input className="input" type="date" value={date} max={now.date} onChange={(e) => setDate(e.target.value)} />
+              <input
+                className="input"
+                type="date"
+                title="Bazar date"
+                value={date}
+                max={now.date}
+                onChange={(e) => setDate(e.target.value)}
+              />
             </div>
             <div>
               <label className="label">Paid by</label>
               {isManager ? (
-                <select className="input" value={payer} onChange={(e) => setPayer(e.target.value)}>
+                <select className="input" title="Who paid" value={payer} onChange={(e) => setPayer(e.target.value)}>
                   {activeMembers.map((m) => (
                     <option key={m.email} value={m.email}>
                       {m.nickname}
@@ -453,6 +475,7 @@ export default function Bazar() {
                   />
                   <select
                     className="input !w-20 !px-1.5 !py-1.5 text-sm"
+                    title="Unit"
                     value={it.unit}
                     onChange={(e) => patchItem(it.key, { unit: e.target.value })}
                   >
@@ -471,7 +494,9 @@ export default function Bazar() {
                     title="Price (Tk)"
                   />
                   <button
+                    type="button"
                     className="btn-ghost p-1.5 rounded-lg text-rose-500"
+                    title="Remove item"
                     onClick={() => setItems((l) => l.filter((x) => x.key !== it.key))}
                   >
                     <Trash2 size={14} />
@@ -513,7 +538,7 @@ export default function Bazar() {
         <div className="space-y-4">
           <div>
             <label className="label">Member</label>
-            <select className="input" value={dutyEmail} onChange={(e) => setDutyEmail(e.target.value)}>
+            <select className="input" title="Duty member" value={dutyEmail} onChange={(e) => setDutyEmail(e.target.value)}>
               {activeMembers.map((m) => (
                 <option key={m.email} value={m.email}>
                   {m.nickname}
@@ -527,6 +552,7 @@ export default function Bazar() {
               <input
                 className="input"
                 type="date"
+                title="Duty start date"
                 value={dutyStart}
                 onChange={(e) => {
                   const v = e.target.value
@@ -537,7 +563,14 @@ export default function Bazar() {
             </div>
             <div>
               <label className="label">To</label>
-              <input className="input" type="date" value={dutyEnd} min={dutyStart} onChange={(e) => setDutyEnd(e.target.value)} />
+              <input
+                className="input"
+                type="date"
+                title="Duty end date"
+                value={dutyEnd}
+                min={dutyStart}
+                onChange={(e) => setDutyEnd(e.target.value)}
+              />
             </div>
           </div>
           <p className="text-xs text-ink/45 font-medium">

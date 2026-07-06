@@ -26,7 +26,8 @@ import { useAbsences, useBazar, useCleaning, useMeals, useTick } from '../hooks/
 import MonthPicker from '../components/MonthPicker'
 import Avatar from '../components/Avatar'
 import Modal from '../components/Modal'
-import { dhakaNow, monthOf, resolveMeal, dayLabel } from '../lib/utils'
+import SegmentTabs from '../components/SegmentTabs'
+import { dhakaNow, monthOf, resolveMeal, nickFromId, dayLabel } from '../lib/utils'
 import { fmtPaisa } from '../lib/money'
 import type { BazarEntry, CleaningDoc } from '../types'
 
@@ -62,8 +63,8 @@ export default function Admin() {
   const [cleanRound, setCleanRound] = useState(1)
   const [cleanDate, setCleanDate] = useState(now.date)
 
-  const nickOf = (em: string) => members.find((m) => m.email === em)?.nickname ?? em
-  const nameOf = (em: string) => members.find((m) => m.email === em)?.name ?? em
+  const nickOf = (em: string) => members.find((m) => m.email === em)?.nickname ?? nickFromId(em)
+  const nameOf = (em: string) => members.find((m) => m.email === em)?.name ?? nickFromId(em)
 
   const board = activeMembers.map((m) => ({
     member: m,
@@ -148,27 +149,7 @@ export default function Admin() {
         <p className="text-sm text-ink/50 font-medium">Only admins can see this page.</p>
       </div>
 
-      {/* Segmented tabs */}
-      <div className="card p-1.5 flex gap-1 no-print sticky top-2 z-30">
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            className={`relative flex-1 flex items-center justify-center gap-1.5 rounded-2xl px-2 py-2.5
-              text-xs sm:text-sm font-bold transition ${tab === id ? 'text-white' : 'text-ink/50 hover:text-ink'}`}
-          >
-            {tab === id && (
-              <motion.div
-                layoutId="admin-tab"
-                className="absolute inset-0 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-lg shadow-brand-500/30"
-                transition={{ type: 'spring', stiffness: 400, damping: 32 }}
-              />
-            )}
-            <Icon size={15} className="relative z-10" />
-            <span className="relative z-10">{label}</span>
-          </button>
-        ))}
-      </div>
+      <SegmentTabs tabs={TABS} value={tab} onChange={setTab} layoutId="admin-tab" />
 
       {/* ---- Meal board ---- */}
       {tab === 'meals' && (

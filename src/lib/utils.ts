@@ -182,6 +182,13 @@ export function avatarColor(name: string): string {
   return AVATAR_COLORS[h % AVATAR_COLORS.length]
 }
 
+// Human-readable fallback when a member doc is not loaded yet or missing:
+// "pending-mamun" -> "Mamun", "someone@gmail.com" -> "Someone".
+export function nickFromId(id: string): string {
+  const raw = id.replace(/^pending-/, '').split('@')[0]
+  return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : id
+}
+
 export function initials(name: string): string {
   const parts = name.trim().split(/\s+/)
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
