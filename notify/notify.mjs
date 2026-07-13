@@ -164,7 +164,8 @@ async function checkCleaningDuty(today) {
 
 async function main() {
   const now = dhakaNow()
-  if (now.minutes < QUIET_START_MIN || now.minutes >= QUIET_END_MIN) {
+  const force = process.env.FORCE_RUN === 'true'
+  if (!force && (now.minutes < QUIET_START_MIN || now.minutes >= QUIET_END_MIN)) {
     console.log(`Quiet hours (${now.date}, ${now.minutes}min) — skipping this run.`)
     return
   }
