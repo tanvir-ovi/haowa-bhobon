@@ -1,0 +1,12 @@
+{
+  "name": "haowa-bhobon-notify",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "notify": "node notify.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}

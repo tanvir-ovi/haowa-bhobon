@@ -1,0 +1,23 @@
+name: Mess notifications
+
+on:
+  schedule:
+    # Every 30 minutes. The script itself skips quiet hours (before 08:00
+    # or after 21:00 Asia/Dhaka) and re-nags at most every 3 hours.
+    - cron: '*/30 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+        working-directory: notify
+      - run: npm run notify
+        working-directory: notify
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

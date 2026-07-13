@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import { useAbsences, useBazar, useExpenses, useMeals, useMonthSnapshot } from '../hooks/useData'
+import { useAbsences, useBazar, useBills, useMeals, useMonthSnapshot } from '../hooks/useData'
 import MonthPicker from '../components/MonthPicker'
 import Avatar from '../components/Avatar'
 import Skeleton from '../components/Skeleton'
@@ -31,7 +31,7 @@ export default function Report() {
   const { meals, loading: mealsLoading } = useMeals(month)
   const { absences } = useAbsences()
   const { entries, loading: bazarLoading } = useBazar(month)
-  const { expenses } = useExpenses(month)
+  const { bills } = useBills(month)
   const { snapshot } = useMonthSnapshot(month)
   const [shareState, setShareState] = useState('')
   const myEmail = (member?.email ?? user?.email ?? '').toLowerCase()
@@ -41,7 +41,7 @@ export default function Report() {
   const loading = mealsLoading || bazarLoading
 
   // Finalized months render from the immutable snapshot; live months compute.
-  const live = computeSettlement(activeMembers, meals, absences, entries, expenses, month, upto)
+  const live = computeSettlement(activeMembers, meals, absences, entries, bills, month, upto)
   const data: Settlement = snapshot
     ? {
         month: snapshot.month,
@@ -70,7 +70,8 @@ export default function Report() {
             : r.balancePaisa < 0
               ? `pays ${fmtPaisa(-r.balancePaisa)}`
               : 'settled'
-        return `${r.nickname}: ${r.meals} meals · due ${fmtPaisa(r.duePaisa)} · paid ${fmtPaisa(r.bazarPaidPaisa)} → ${tag}`
+        const paidPaisa = r.bazarPaidPaisa + r.billsPaidPaisa
+        return `${r.nickname}: ${r.meals} meals · due ${fmtPaisa(r.duePaisa)} · paid ${fmtPaisa(paidPaisa)} → ${tag}`
       }),
     ]
     return lines.join('\n')
@@ -201,7 +202,7 @@ export default function Report() {
           <h2 className="font-extrabold mb-4 flex items-center gap-2">
             <PieChart size={18} className="text-brand-500" /> Settle up
           </h2>
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm min-w-[760px]">
             <thead>
               <tr className="text-left text-[11px] font-extrabold uppercase tracking-wider text-ink/40 border-b border-ink/8">
                 <th className="pb-2 pr-3">Member</th>
@@ -210,6 +211,7 @@ export default function Report() {
                 <th className="pb-2 px-3 text-right">Utilities</th>
                 <th className="pb-2 px-3 text-right">Total due</th>
                 <th className="pb-2 px-3 text-right">Bazar paid</th>
+                <th className="pb-2 px-3 text-right">Bills paid</th>
                 <th className="pb-2 pl-3 text-right">Balance</th>
               </tr>
             </thead>
@@ -232,6 +234,9 @@ export default function Report() {
                   <td className="py-2.5 px-3 text-right font-semibold tabular-nums text-mteal-600">
                     {fmtPaisa(r.bazarPaidPaisa)}
                   </td>
+                  <td className="py-2.5 px-3 text-right font-semibold tabular-nums text-mteal-600">
+                    {fmtPaisa(r.billsPaidPaisa)}
+                  </td>
                   <td className="py-2.5 pl-3 text-right">
                     {r.balancePaisa > 0 ? (
                       <span className="chip bg-emerald-100 text-emerald-700">
@@ -251,7 +256,8 @@ export default function Report() {
           </table>
           <p className="text-[11px] text-ink/40 font-semibold mt-3">
             Meal cost is allocated proportionally to meals eaten; utilities are split equally.
-            Balance = bazar paid − total due. All member rows always sum exactly to the month totals.
+            Balance = (bazar paid + bills paid) − total due. All member rows always sum exactly to
+            the month totals.
           </p>
         </motion.div>
       )}

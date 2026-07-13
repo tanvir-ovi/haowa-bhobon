@@ -295,7 +295,7 @@ export default function Dashboard() {
           {greeting}, {member?.nickname ?? 'friend'} 👋
         </h1>
         <p className="text-sm text-ink/50 font-medium">
-          {monthLabel(month)} · here is your mess at a glance
+          {monthLabel(month)} · here is your mess at a glance (yes, we can see who skipped bazar)
         </p>
       </div>
 
@@ -348,10 +348,14 @@ export default function Dashboard() {
                 {dutyToday ? (
                   <span className="text-ink">{nickOf(dutyToday.email)}</span>
                 ) : (
-                  <span className="text-ink/40">nobody today</span>
+                  <span className="text-ink/40">nobody — the fridge is on its own today 😬</span>
                 )}
                 {dutyNext && (
-                  <span className="text-ink/45"> · next {nickOf(dutyNext.email)} ({dayLabel(dutyNext.startDate)})</span>
+                  <span className="text-ink/45">
+                    {' '}
+                    · next up {nickOf(dutyNext.email)} ({dayLabel(dutyNext.startDate)}) — start
+                    mentally preparing
+                  </span>
                 )}
               </span>
             </div>
@@ -394,7 +398,9 @@ export default function Dashboard() {
               <h2 className="font-extrabold">Bazar duty — {monthLabel(month)}</h2>
             </div>
             {duty.length === 0 ? (
-              <p className="text-sm text-ink/45 font-medium">No duty assigned this month yet.</p>
+              <p className="text-sm text-ink/45 font-medium">
+                No duty assigned this month yet — the fridge is watching, waiting. 🥶
+              </p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {duty.map((d) => {
@@ -432,7 +438,9 @@ export default function Dashboard() {
               <h2 className="font-extrabold">Washroom & basin washing</h2>
             </div>
             {cleaning.length === 0 ? (
-              <p className="text-sm text-ink/45 font-medium">No cleaning duty assigned yet.</p>
+              <p className="text-sm text-ink/45 font-medium">
+                No cleaning duty assigned yet — the washroom is judging everyone equally. 🧽
+              </p>
             ) : (
               <div className="space-y-4">
                 {[...new Set(cleaning.map((c) => c.round))]
@@ -510,7 +518,8 @@ export default function Dashboard() {
           </p>
           {activeAbsences.length === 0 ? (
             <p className="text-sm text-ink/45 font-medium">
-              Nobody is away. Everyone's meals turn ON automatically every day.
+              Nobody is away. Everyone's meals turn ON automatically every day — resistance is
+              futile, breakfast is inevitable.
             </p>
           ) : (
             <div className="flex flex-wrap gap-2">

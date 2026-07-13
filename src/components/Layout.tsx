@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import Logo from './Logo'
 import Avatar from './Avatar'
+import NotificationBell from './NotificationBell'
 import { useAuth } from '../context/AuthContext'
 import { useTick } from '../hooks/useData'
 import { dhakaNow } from '../lib/utils'
@@ -97,6 +98,7 @@ export default function Layout() {
                   {member?.role ?? 'guest'}
                 </div>
               </div>
+              <NotificationBell />
               <button className="btn-ghost p-2 rounded-xl" onClick={logout} title="Log out">
                 <LogOut size={16} />
               </button>
@@ -113,6 +115,7 @@ export default function Layout() {
             <div className="font-extrabold leading-tight">{MESS_NAME}</div>
           </div>
           <Clock />
+          <NotificationBell />
           <button className="btn-ghost p-2 rounded-xl" onClick={logout} title="Log out">
             <LogOut size={16} />
           </button>

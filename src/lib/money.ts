@@ -1,7 +1,7 @@
 // All settlement math runs on integer paisa (1 Tk = 100 paisa) so that
 // floating-point drift can never make member totals disagree with the
 // month totals. Rounding remainders are distributed deterministically.
-import type { AbsenceDoc, BazarEntry, ExpenseDoc, MealDoc, Member } from '../types'
+import type { AbsenceDoc, BazarEntry, BillDoc, MealDoc, Member } from '../types'
 import { countMeals, fmtTk } from './utils'
 
 export const toPaisa = (tk: number): number => Math.round((tk || 0) * 100)
@@ -45,6 +45,7 @@ export interface SettlementRow {
   utilityPaisa: number
   duePaisa: number
   bazarPaidPaisa: number
+  billsPaidPaisa: number
   balancePaisa: number // positive = To Receive, negative = To Pay
 }
 
@@ -64,7 +65,7 @@ export function computeSettlement(
   meals: Map<string, MealDoc>,
   absences: AbsenceDoc[],
   entries: BazarEntry[],
-  expenses: ExpenseDoc,
+  bills: BillDoc[],
   month: string,
   upto: string,
 ): Settlement {
@@ -74,27 +75,31 @@ export function computeSettlement(
 
   const mealCostParts = allocateByWeight(totalBazarPaisa, mealCounts)
 
-  const billsPaisa =
-    (expenses.wifiPaisa || 0) +
-    (expenses.waterPaisa || 0) +
-    (expenses.gasPaisa || 0) +
-    (expenses.electricityPaisa || 0) +
-    (expenses.newspaperPaisa || 0) +
-    (expenses.dustbinPaisa || 0) +
-    (expenses.otherPaisa || 0)
+  // Every bill (wifi, gas, an electricity recharge, the cook's total, …) is
+  // its own dated, payer-attributed entry — same shape as a bazar entry.
+  const billsPaisa = bills
+    .filter((b) => b.type !== 'khala')
+    .reduce((s, b) => s + (b.amountPaisa || 0), 0)
+  const khalaTotalPaisa = bills
+    .filter((b) => b.type === 'khala')
+    .reduce((s, b) => s + (b.amountPaisa || 0), 0)
   // Bills and the total cook bill are one shared pot, split equally.
-  const khalaTotalPaisa = expenses.khalaTotalPaisa || 0
   const utilityShares = splitEqual(billsPaisa + khalaTotalPaisa, activeMembers.length)
 
   const paidByMember = new Map<string, number>()
   for (const e of entries) {
     paidByMember.set(e.email, (paidByMember.get(e.email) ?? 0) + (e.totalPaisa || 0))
   }
+  const billsPaidByMember = new Map<string, number>()
+  for (const b of bills) {
+    billsPaidByMember.set(b.email, (billsPaidByMember.get(b.email) ?? 0) + (b.amountPaisa || 0))
+  }
 
   const rows: SettlementRow[] = activeMembers.map((m, i) => {
     const utilityPaisa = utilityShares[i]
     const duePaisa = mealCostParts[i] + utilityPaisa
     const bazarPaidPaisa = paidByMember.get(m.email) ?? 0
+    const billsPaidPaisa = billsPaidByMember.get(m.email) ?? 0
     return {
       email: m.email,
       name: m.name,
@@ -104,7 +109,8 @@ export function computeSettlement(
       utilityPaisa,
       duePaisa,
       bazarPaidPaisa,
-      balancePaisa: bazarPaidPaisa - duePaisa,
+      billsPaidPaisa,
+      balancePaisa: bazarPaidPaisa + billsPaidPaisa - duePaisa,
     }
   })
 

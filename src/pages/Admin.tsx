@@ -146,7 +146,9 @@ export default function Admin() {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-extrabold">Admin Overview 🛡️</h1>
-        <p className="text-sm text-ink/50 font-medium">Only admins can see this page.</p>
+        <p className="text-sm text-ink/50 font-medium">
+          Only admins can see this page. With great power comes great spreadsheet responsibility. 🕷️
+        </p>
       </div>
 
       <SegmentTabs tabs={TABS} value={tab} onChange={setTab} layoutId="admin-tab" />

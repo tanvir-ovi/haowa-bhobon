@@ -4,14 +4,13 @@ import { db } from '../firebase'
 import type {
   AbsenceDoc,
   BazarEntry,
+  BillDoc,
   CleaningDoc,
   DutyDoc,
-  ExpenseDoc,
   MealDoc,
   MenuItemDoc,
   MonthSnapshot,
 } from '../types'
-import { KHALA_DEFAULT_PAISA } from '../lib/constants'
 
 export function useMeals(month: string): { meals: Map<string, MealDoc>; loading: boolean } {
   const [meals, setMeals] = useState<Map<string, MealDoc>>(new Map())
@@ -54,40 +53,27 @@ export function useBazar(month: string): { entries: BazarEntry[]; loading: boole
   return { entries, loading }
 }
 
-// Fixed monthly bills prefill each new month; the manager can adjust.
-export function emptyExpenses(month: string): ExpenseDoc {
-  return {
-    month,
-    wifiPaisa: 800 * 100,
-    waterPaisa: 500 * 100,
-    gasPaisa: 1000 * 100,
-    electricityPaisa: 0,
-    newspaperPaisa: 0,
-    dustbinPaisa: 120 * 100,
-    otherPaisa: 0,
-    otherNote: '',
-    khalaTotalPaisa: KHALA_DEFAULT_PAISA,
-  }
-}
-
-export function useExpenses(month: string): { expenses: ExpenseDoc; loading: boolean } {
-  const [expenses, setExpenses] = useState<ExpenseDoc>(emptyExpenses(month))
+// Bills (wifi, gas, electricity recharges, the cook's total, …) — each one
+// its own dated, payer-attributed entry, same shape as a bazar entry.
+export function useBills(month: string): { bills: BillDoc[]; loading: boolean } {
+  const [bills, setBills] = useState<BillDoc[]>([])
   const [loading, setLoading] = useState(true)
   useEffect(() => {
     setLoading(true)
-    setExpenses(emptyExpenses(month))
+    const q = query(collection(db, 'bills'), where('month', '==', month))
     return onSnapshot(
-      doc(db, 'expenses', month),
+      q,
       (snap) => {
-        if (snap.exists()) {
-          setExpenses({ ...emptyExpenses(month), ...(snap.data() as Partial<ExpenseDoc>) })
-        }
+        const list: BillDoc[] = []
+        snap.forEach((d) => list.push({ ...(d.data() as BillDoc), id: d.id }))
+        list.sort((a, b) => b.date.localeCompare(a.date))
+        setBills(list)
         setLoading(false)
       },
       () => setLoading(false),
     )
   }, [month])
-  return { expenses, loading }
+  return { bills, loading }
 }
 
 export function useDuty(month: string): { duty: DutyDoc[]; loading: boolean } {

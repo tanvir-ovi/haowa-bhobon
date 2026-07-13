@@ -76,10 +76,15 @@ service cloud.firestore {
         || (isMember() && resource.data.email == myEmail());
     }
 
-    // Monthly utility bills. Doc id = YYYY-MM.
-    match /expenses/{month} {
+    // Bills (wifi, gas, an electricity recharge, the cook's total, …) — each
+    // paid from a member's own pocket and credited to their balance, just
+    // like a bazar entry.
+    match /bills/{id} {
       allow read: if isMember();
-      allow write: if isManager();
+      allow create: if isManager()
+        || (isMember() && request.resource.data.email == myEmail());
+      allow update, delete: if isManager()
+        || (isMember() && resource.data.email == myEmail());
     }
 
     // Bazar duty schedule (3-day cycles). Assigned by manager/admin.

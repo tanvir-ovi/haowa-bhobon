@@ -211,7 +211,8 @@ export default function Bazar() {
         <div>
           <h1 className="text-2xl font-extrabold">Bazar 🛒</h1>
           <p className="text-sm text-ink/50 font-medium">
-            Groceries paid from a member's own pocket — credited to their balance.
+            Groceries paid from a member's own pocket — credited to their balance. Log it before
+            you forget, future-you always does. 🧠
           </p>
         </div>
         <div className="flex items-center gap-2">

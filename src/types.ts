@@ -9,6 +9,7 @@ export interface Member {
   phone: string
   role: Role
   active: boolean
+  fcmTokens?: string[] // web push device tokens, registered from this browser
 }
 
 export interface MealDoc {
@@ -55,17 +56,31 @@ export interface BazarEntry {
   createdAt?: unknown
 }
 
-export interface ExpenseDoc {
+export type BillType =
+  | 'wifi'
+  | 'water'
+  | 'gas'
+  | 'electricity'
+  | 'newspaper'
+  | 'dustbin'
+  | 'khala'
+  | 'other'
+
+// A single paid bill (wifi, a gas cylinder, one electricity recharge, the
+// cook's monthly total, etc.), always tied to whoever actually paid it —
+// same shape as a bazar entry — so it credits their balance. Electricity
+// is prepaid and recharged at irregular amounts multiple times a month;
+// modelling every bill as its own dated entry (instead of one lump sum
+// per month) handles that for free.
+export interface BillDoc {
+  id?: string
   month: string
-  wifiPaisa: number
-  waterPaisa: number
-  gasPaisa: number
-  electricityPaisa: number
-  newspaperPaisa: number
-  dustbinPaisa: number // waste collection service
-  otherPaisa: number
-  otherNote: string
-  khalaTotalPaisa: number // one total cook bill, split equally
+  type: BillType
+  date: string
+  email: string // who paid
+  amountPaisa: number
+  note: string
+  createdAt?: unknown
 }
 
 // A custom bazar item a member added — becomes part of the shared menu.
@@ -114,6 +129,7 @@ export interface MonthSnapshot {
     utilityPaisa: number
     duePaisa: number
     bazarPaidPaisa: number
+    billsPaidPaisa: number
     balancePaisa: number
   }[]
 }

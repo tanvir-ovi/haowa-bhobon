@@ -115,7 +115,8 @@ export default function Members() {
         <div>
           <h1 className="text-2xl font-extrabold">Members 👥</h1>
           <p className="text-sm text-ink/50 font-medium">
-            {members.filter((m) => m.active).length} active · only listed emails can log in.
+            {members.filter((m) => m.active).length} active · only listed emails can log in — no
+            gatecrashing the mess. 🚪
           </p>
         </div>
         {isAdmin && (

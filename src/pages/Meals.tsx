@@ -102,7 +102,8 @@ export default function Meals() {
         <div>
           <h1 className="text-2xl font-extrabold">Meal Calendar 🍽️</h1>
           <p className="text-sm text-ink/50 font-medium">
-            Tap L / D to turn meals on or off. Lunch locks 9:30 AM, dinner 6:00 PM.
+            Tap L / D to turn meals on or off. Lunch locks 9:30 AM, dinner 6:00 PM — after that,
+            the kitchen doesn't take appeals. ⚖️
           </p>
         </div>
         <MonthPicker month={month} onChange={setMonth} />
